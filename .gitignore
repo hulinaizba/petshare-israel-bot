@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.env
+*.json
+!*.example.json
+bot.log
+launchd.log
+.DS_Store
