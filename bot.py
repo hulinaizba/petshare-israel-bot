@@ -1,16 +1,27 @@
-"""Telegram-бот PetShare Israel: каталог животных для аренды.
+"""Telegram-бот PetShare Israel: каталог животных и заявки на аренду.
 
 Запуск: ./venv/bin/python bot.py
 """
 
 import logging
+from datetime import datetime
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+)
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters,
 )
 
 import config
@@ -33,6 +44,20 @@ CATEGORY_EMOJI = {
 }
 
 RISK_EMOJI = {"низкий": "🟢", "средний": "🟡", "высокий": "🔴"}
+
+# Комиссии платформы
+OWNER_COMMISSION = 0.20   # 20% с владельца
+CLIENT_FEE = 0.10         # 10% сервисный сбор с клиента
+
+# Состояния сценария заявки
+REQ_DATE, REQ_PHONE, REQ_CONFIRM = range(3)
+
+
+def parse_price(value):
+    try:
+        return int(str(value).strip())
+    except (ValueError, TypeError):
+        return 0
 
 
 def main_menu_keyboard():
@@ -122,7 +147,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "4️⃣ Встречаетесь и наслаждаетесь 🐾\n\n"
             "📋 У всех животных есть ветеринарные документы.\n"
             "🛡 Для крупных и экзотических животных — обязательное\n"
-            "сопровождение владельца.\n"
+            "сопровождение владельца.\n\n"
+            f"💳 К цене аренды добавляется сервисный сбор {int(CLIENT_FEE * 100)}%."
         )
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🐾 Открыть каталог", callback_data="catalog")],
@@ -164,15 +190,151 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if data.startswith("request:"):
-        animal_id = data.split(":", 1)[1]
-        animal = sheets.get_animal_by_id(animal_id)
-        name = animal.get("имя", "") if animal else animal_id
-        await query.message.reply_text(
-            f"📩 Заявка на «{name}» — этот раздел подключим на следующем шаге.\n"
-            "Пока можно полистать каталог 🐾"
-        )
-        return
+
+# ---------- Сценарий заявки ----------
+
+async def request_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Клиент нажал «Оставить заявку» под карточкой."""
+    query = update.callback_query
+    await query.answer()
+    animal_id = query.data.split(":", 1)[1]
+    animal = sheets.get_animal_by_id(animal_id)
+    if not animal:
+        await query.message.reply_text("Это животное сейчас недоступно 🐾")
+        return ConversationHandler.END
+    context.user_data["req_animal"] = animal
+    await query.message.reply_text(
+        f"📩 Заявка на «{animal.get('имя', '')}»\n\n"
+        "На какую дату и время хотите арендовать?\n"
+        "Например: <i>12.07 в 16:00</i>\n\n"
+        "Отменить заявку — /cancel",
+        parse_mode="HTML",
+    )
+    return REQ_DATE
+
+
+async def request_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["req_date"] = update.message.text.strip()
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("📱 Отправить мой номер", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+    await update.message.reply_text(
+        "Отлично! Теперь оставьте номер телефона для связи —\n"
+        "нажмите кнопку ниже или напишите номер вручную:",
+        reply_markup=keyboard,
+    )
+    return REQ_PHONE
+
+
+async def request_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.contact:
+        phone = update.message.contact.phone_number
+    else:
+        phone = update.message.text.strip()
+    context.user_data["req_phone"] = phone
+
+    animal = context.user_data["req_animal"]
+    price = parse_price(animal.get("цена_событие"))
+    client_fee = round(price * CLIENT_FEE)
+    total = price + client_fee
+
+    summary = (
+        "Проверьте заявку:\n\n"
+        f"🐾 Животное: <b>{animal.get('имя', '')}</b> ({animal.get('порода', '')})\n"
+        f"📅 Дата: {context.user_data['req_date']}\n"
+        f"📱 Телефон: {phone}\n\n"
+        f"💰 Аренда: {price}₪\n"
+        f"➕ Сервисный сбор ({int(CLIENT_FEE * 100)}%): {client_fee}₪\n"
+        f"<b>Итого: {total}₪</b>\n\n"
+        "Оплата — после подтверждения владельцем."
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Отправить заявку", callback_data="req_confirm")],
+        [InlineKeyboardButton("❌ Отменить", callback_data="req_cancel")],
+    ])
+    await update.message.reply_text(
+        summary, reply_markup=keyboard, parse_mode="HTML",
+    )
+    # Убираем клавиатуру с кнопкой контакта
+    await update.message.reply_text("👆", reply_markup=ReplyKeyboardRemove())
+    return REQ_CONFIRM
+
+
+async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "req_cancel":
+        await query.edit_message_text("Заявка отменена. Возвращайтесь в каталог 🐾")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    animal = context.user_data["req_animal"]
+    user = update.effective_user
+    price = parse_price(animal.get("цена_событие"))
+    client_fee = round(price * CLIENT_FEE)
+    owner_commission = round(price * OWNER_COMMISSION)
+    platform_income = client_fee + owner_commission
+
+    req_id = sheets.next_request_id()
+    client_name = user.full_name + (f" (@{user.username})" if user.username else "")
+    sheets.add_request([
+        req_id,
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        client_name,
+        context.user_data["req_phone"],
+        user.id,
+        animal.get("id", ""),
+        animal.get("имя", ""),
+        context.user_data["req_date"],
+        "новая",
+        "",
+        price,
+        client_fee,
+        owner_commission,
+        platform_income,
+    ])
+
+    await query.edit_message_text(
+        f"✅ Заявка <b>{req_id}</b> отправлена!\n\n"
+        "Мы свяжемся с вами для подтверждения даты.\n"
+        "Спасибо, что выбрали PetShare Israel 🐾",
+        parse_mode="HTML",
+    )
+
+    # Уведомление администратору
+    owner = sheets.get_owner_by_id(str(animal.get("владелец_id", "")).strip()) or {}
+    admin_text = (
+        f"🔔 <b>Новая заявка {req_id}</b>\n\n"
+        f"🐾 {animal.get('имя', '')} ({animal.get('порода', '')}, {animal.get('id', '')})\n"
+        f"📅 Дата: {context.user_data['req_date']}\n"
+        f"👤 Клиент: {client_name}\n"
+        f"📱 Телефон: {context.user_data['req_phone']}\n\n"
+        f"👨‍💼 Владелец: {owner.get('имя', '—')}, {owner.get('телефон', '—')}\n"
+        f"💬 WhatsApp: {owner.get('whatsapp', '—')}\n\n"
+        f"💰 Аренда: {price}₪\n"
+        f"➕ Сбор с клиента (10%): {client_fee}₪\n"
+        f"➖ Комиссия владельца (20%): {owner_commission}₪\n"
+        f"<b>Доход платформы: {platform_income}₪</b>"
+    )
+    try:
+        await context.bot.send_message(config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML")
+    except Exception:
+        logger.exception("Не удалось отправить уведомление администратору")
+
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+async def request_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text(
+        "Заявка отменена. Возвращайтесь в каталог 🐾",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return ConversationHandler.END
 
 
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,13 +345,32 @@ async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("♻️ Кэш сброшен, данные перечитаются из таблицы.")
 
 
+async def on_error(update, context):
+    logger.exception("Ошибка при обработке апдейта", exc_info=context.error)
+
+
 def main():
     if not config.BOT_TOKEN:
         raise SystemExit("Не задан PETSHARE_BOT_TOKEN в .env")
     app = Application.builder().token(config.BOT_TOKEN).build()
+
+    request_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(request_start, pattern=r"^request:")],
+        states={
+            REQ_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, request_date)],
+            REQ_PHONE: [MessageHandler(
+                (filters.TEXT & ~filters.COMMAND) | filters.CONTACT, request_phone
+            )],
+            REQ_CONFIRM: [CallbackQueryHandler(request_confirm, pattern=r"^req_(confirm|cancel)$")],
+        },
+        fallbacks=[CommandHandler("cancel", request_cancel)],
+    )
+
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("reload", cmd_reload))
+    app.add_handler(request_conv)
     app.add_handler(CallbackQueryHandler(on_callback))
+    app.add_error_handler(on_error)
     logger.info("Бот PetShare Israel запущен")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
