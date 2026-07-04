@@ -32,7 +32,9 @@ ADMIN_CHAT_ID = int(os.environ.get("PETSHARE_ADMIN_CHAT_ID", "0"))
 
 # Google Sheets
 SERVICE_ACCOUNT_FILE = str(BASE_DIR / "service_account.json")
-SPREADSHEET_NAME = os.environ.get("PETSHARE_SPREADSHEET_NAME", "PetShare Israel")
+# ID таблицы — длинный код из её ссылки:
+# https://docs.google.com/spreadsheets/d/<ВОТ_ЭТОТ_КОД>/edit
+SPREADSHEET_ID = os.environ.get("PETSHARE_SPREADSHEET_ID", "")
 
 # Названия листов в таблице
 SHEET_ANIMALS = "Животные"
