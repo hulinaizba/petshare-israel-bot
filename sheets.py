@@ -118,6 +118,11 @@ def update_animal_status(animal_id, active, verified_status):
     })
 
 
+def update_animal_translations(animal_id, updates):
+    """Записывает переведённые поля (например {'описание_en': '...'})"""
+    return _update_fields(config.SHEET_ANIMALS, animal_id, updates)
+
+
 # ---------- Владельцы ----------
 
 def get_owner_by_id(owner_id):

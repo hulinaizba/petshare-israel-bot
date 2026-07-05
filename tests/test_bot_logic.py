@@ -195,6 +195,31 @@ def test_format_card_in_hebrew():
     assert "כרטיס" in text
 
 
+def test_card_values_translated():
+    text_en = bot.format_card(ANIMALS[0], 1, 1, "en")
+    assert "Tel Aviv" in text_en           # город из словаря
+    assert "yes" in text_en                # можно_детям: да → yes
+    assert "low" in text_en                # риск: низкий → low
+    text_he = bot.format_card(ANIMALS[0], 1, 1, "he")
+    assert "תל אביב" in text_he
+
+
+def test_localized_field_fallback():
+    animal = dict(ANIMALS[0])
+    # перевода нет — показываем русский
+    assert bot.localized_field(animal, "описание", "en") == "Звезда"
+    # перевод есть — показываем его
+    animal["описание_en"] = "A star"
+    assert bot.localized_field(animal, "описание", "en") == "A star"
+    # для русского всегда оригинал
+    assert bot.localized_field(animal, "описание", "ru") == "Звезда"
+
+
+def test_tr_value_unknown_stays():
+    assert i18n.tr_value("Кфар-Саба", "en") == "Кфар-Саба"  # нет в словаре — как есть
+    assert i18n.tr_value("Собаки", "he") == "כלבים"
+
+
 # ---------- Передержка ----------
 
 SITTERS = [

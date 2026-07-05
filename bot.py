@@ -28,7 +28,7 @@ from telegram.ext import (
 
 import config
 import sheets
-from i18n import LANGS, t
+from i18n import LANGS, t, tr_value
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -153,7 +153,7 @@ def format_friend_card(profile, position, total, lang):
         f"{SEX_ICONS.get(sex, '')} {t('frd_card_sex', lang)}: "
         f"{t(SEX_KEYS.get(sex, 'sex_male'), lang)}   |   "
         f"{t('frd_card_age', lang)}: {profile.get('возраст', '')}",
-        f"📍 {profile.get('город', '')}",
+        f"📍 {tr_value(profile.get('город', ''), lang)}",
         f"🎯 {t('frd_card_goal', lang)}: {t(GOAL_KEYS.get(goal, 'goal_both'), lang)}",
         f"📋 {t('frd_card_docs', lang)}: {profile.get('документы', '')}",
     ]
@@ -175,7 +175,7 @@ def board_menu_keyboard(lang):
 
 def format_sitter_card(sitter, position, total, lang):
     return "\n".join([
-        f"🤝 <b>{sitter.get('имя', '')}</b> — 📍 {sitter.get('город', '')}",
+        f"🤝 <b>{sitter.get('имя', '')}</b> — 📍 {tr_value(sitter.get('город', ''), lang)}",
         "",
         f"🐾 {t('sit_card_takes', lang)}: {sitter.get('животные', '')}",
         f"⭐ {t('sit_card_exp', lang)}: {sitter.get('опыт', '')}",
@@ -201,7 +201,7 @@ def catalog_keyboard(lang):
         return None
     rows = [
         [InlineKeyboardButton(
-            f"{CATEGORY_EMOJI.get(cat, '🐾')} {cat}",
+            f"{CATEGORY_EMOJI.get(cat, '🐾')} {tr_value(cat, lang)}",
             callback_data=f"card:{cat}:0",
         )]
         for cat in categories
@@ -246,7 +246,7 @@ def filter_menu(context):
     """Текст и клавиатура экрана фильтров."""
     lang = L(context)
     filt = get_filters(context)
-    city_label = t("any_city", lang) if filt["city"] == "any" else filt["city"]
+    city_label = t("any_city", lang) if filt["city"] == "any" else tr_value(filt["city"], lang)
     price_label = t(f"price_{filt['price']}", lang)
     kids_label = t("kids_any", lang) if filt["kids"] == "any" else t("kids_only_yes", lang)
     count = len(apply_filters(sheets.get_animals(), filt))
@@ -270,23 +270,36 @@ def filter_menu(context):
     return text, keyboard
 
 
+def localized_field(animal, field, lang):
+    """Значение свободного поля на языке пользователя.
+
+    Берёт колонку вида 'описание_en'; если она пустая — исходную русскую.
+    """
+    if lang != "ru":
+        translated = str(animal.get(f"{field}_{lang}", "")).strip()
+        if translated:
+            return translated
+    return str(animal.get(field, "")).strip()
+
+
 def format_card(animal, position, total, lang="ru"):
     """Собирает текст карточки животного."""
     risk = str(animal.get("уровень_риска", "")).strip()
     lines = [
         f"🐾 <b>{animal.get('имя', '')}</b> — {animal.get('порода', '')}",
         "",
-        f"📍 {animal.get('город', '')}   |   {t('card_age', lang)}: {animal.get('возраст', '')}",
+        f"📍 {tr_value(animal.get('город', ''), lang)}   |   "
+        f"{t('card_age', lang)}: {animal.get('возраст', '')}",
         f"💰 {animal.get('цена_час', '')}₪/{t('card_hour', lang)}   |   "
         f"{animal.get('цена_событие', '')}₪/{t('card_event', lang)}",
-        f"😊 {t('card_character', lang)}: {animal.get('темперамент', '')}",
-        f"⭐ {t('card_skills', lang)}: {animal.get('навыки', '')}",
-        f"{RISK_EMOJI.get(risk, '⚪')} {t('card_risk', lang)}: {risk}",
-        f"👶 {t('card_kids', lang)}: {animal.get('можно_детям', '')}",
+        f"😊 {t('card_character', lang)}: {localized_field(animal, 'темперамент', lang)}",
+        f"⭐ {t('card_skills', lang)}: {localized_field(animal, 'навыки', lang)}",
+        f"{RISK_EMOJI.get(risk, '⚪')} {t('card_risk', lang)}: {tr_value(risk, lang)}",
+        f"👶 {t('card_kids', lang)}: {tr_value(animal.get('можно_детям', ''), lang)}",
     ]
     if str(animal.get("сопровождение_владельца", "")).strip().lower() == "да":
         lines.append(t("card_accompany", lang))
-    description = str(animal.get("описание", "")).strip()
+    description = localized_field(animal, "описание", lang)
     if description:
         lines += ["", f"<i>{description}</i>"]
     lines += ["", t("card_pos", lang, pos=position, total=total)]
@@ -380,6 +393,53 @@ async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     sheets.clear_cache()
     await update.message.reply_text("♻️ Кэш сброшен, данные перечитаются из таблицы.")
+
+
+TRANSLATE_FIELDS = ("темперамент", "навыки", "описание")
+
+
+async def cmd_translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Автоперевод карточек на en/he (только для администратора).
+
+    Переводит только пустые колонки *_en / *_he — уже заполненные не трогает.
+    """
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        return
+    from deep_translator import GoogleTranslator
+
+    await update.message.reply_text("🌐 Перевожу карточки, это может занять минуту...")
+    translators = {
+        "en": GoogleTranslator(source="ru", target="en"),
+        "he": GoogleTranslator(source="ru", target="iw"),
+    }
+    sheets.clear_cache()
+    done, errors = 0, 0
+    for animal in sheets._get_records(config.SHEET_ANIMALS):
+        animal_id = str(animal.get("id", "")).strip()
+        if not animal_id:
+            continue
+        updates = {}
+        for field in TRANSLATE_FIELDS:
+            source = str(animal.get(field, "")).strip()
+            if not source:
+                continue
+            for lang_code, translator in translators.items():
+                column = f"{field}_{lang_code}"
+                if str(animal.get(column, "")).strip():
+                    continue  # уже переведено
+                try:
+                    updates[column] = translator.translate(source)
+                except Exception:
+                    logger.exception("Не перевёлся %s/%s", animal_id, column)
+                    errors += 1
+        if updates:
+            sheets.update_animal_translations(animal_id, updates)
+            done += 1
+    sheets.clear_cache()
+    msg = f"✅ Готово: обновлено карточек — {done}."
+    if errors:
+        msg += f" Ошибок перевода: {errors} (эти поля покажутся по-русски)."
+    await update.message.reply_text(msg)
 
 
 # ---------- Кнопки (общий обработчик) ----------
@@ -612,7 +672,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 cities.append(city)
         rows = [[InlineKeyboardButton(t("any_city_btn", lang), callback_data="f_city_set:any")]]
         rows += [
-            [InlineKeyboardButton(f"📍 {c}", callback_data=f"f_city_set:{c}")]
+            [InlineKeyboardButton(f"📍 {tr_value(c, lang)}", callback_data=f"f_city_set:{c}")]
             for c in sorted(cities)
         ]
         await query.edit_message_text(
@@ -1948,6 +2008,7 @@ def main():
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
+    app.add_handler(CommandHandler("translate", cmd_translate))
     app.add_handler(request_conv)
     app.add_handler(owner_conv)
     app.add_handler(sitter_conv)

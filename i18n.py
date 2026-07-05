@@ -933,3 +933,47 @@ def t(key, lang, **kwargs):
     entry = T[key]
     text = entry.get(lang) or entry[DEFAULT_LANG]
     return text.format(**kwargs) if kwargs else text
+
+
+# Перевод значений из таблицы (города, категории, да/нет, риск).
+# Ключ — как записано в таблице по-русски.
+VALUES = {
+    # города и районы
+    "Тель-Авив": {"en": "Tel Aviv", "he": "תל אביב"},
+    "Иерусалим": {"en": "Jerusalem", "he": "ירושלים"},
+    "Хайфа": {"en": "Haifa", "he": "חיפה"},
+    "Ришон-ле-Цион": {"en": "Rishon LeZion", "he": "ראשון לציון"},
+    "Беэр-Шева": {"en": "Be'er Sheva", "he": "באר שבע"},
+    "Нетания": {"en": "Netanya", "he": "נתניה"},
+    "Ашдод": {"en": "Ashdod", "he": "אשדוד"},
+    "Центральный округ": {"en": "Central District", "he": "מחוז המרכז"},
+    "Северный округ": {"en": "Northern District", "he": "מחוז הצפון"},
+    "Южный округ": {"en": "Southern District", "he": "מחוז הדרום"},
+    "Центр": {"en": "Center", "he": "מרכז"},
+    "Север": {"en": "North", "he": "צפון"},
+    "Юг": {"en": "South", "he": "דרום"},
+    # категории каталога
+    "Собаки": {"en": "Dogs", "he": "כלבים"},
+    "Кошки": {"en": "Cats", "he": "חתולים"},
+    "Птицы": {"en": "Birds", "he": "ציפורים"},
+    "Грызуны и кролики": {"en": "Rodents & rabbits", "he": "מכרסמים וארנבים"},
+    "Экзотика и ферма": {"en": "Exotic & farm", "he": "אקזוטי וחווה"},
+    # значения полей
+    "да": {"en": "yes", "he": "כן"},
+    "нет": {"en": "no", "he": "לא"},
+    "не указан": {"en": "not specified", "he": "לא צוין"},
+    "низкий": {"en": "low", "he": "נמוכה"},
+    "средний": {"en": "medium", "he": "בינונית"},
+    "высокий": {"en": "high", "he": "גבוהה"},
+}
+
+
+def tr_value(value, lang):
+    """Переводит значение из таблицы по словарю; неизвестное — как есть."""
+    value = str(value).strip()
+    if lang == DEFAULT_LANG:
+        return value
+    entry = VALUES.get(value)
+    if entry:
+        return entry.get(lang, value)
+    return value
