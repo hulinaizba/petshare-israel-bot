@@ -87,3 +87,24 @@ def next_request_id():
     """Генерирует следующий номер заявки вида REQ-001."""
     records = _get_records(config.SHEET_REQUESTS)
     return f"REQ-{len(records) + 1:03d}"
+
+
+def get_request(req_id):
+    """Возвращает заявку по номеру как словарь, или None."""
+    for r in _get_records(config.SHEET_REQUESTS):
+        if str(r.get("id", "")).strip() == req_id:
+            return r
+    return None
+
+
+def update_request_status(req_id, status):
+    """Меняет статус заявки в листе 'Заявки'. Возвращает True при успехе."""
+    ws = _get_spreadsheet().worksheet(config.SHEET_REQUESTS)
+    cell = ws.find(req_id, in_column=1)
+    if cell is None:
+        return False
+    headers = ws.row_values(1)
+    status_col = headers.index("статус") + 1
+    ws.update_cell(cell.row, status_col, status)
+    _cache.pop(config.SHEET_REQUESTS, None)
+    return True

@@ -60,6 +60,12 @@ def parse_price(value):
         return 0
 
 
+def whatsapp_link(phone):
+    """Превращает номер в ссылку wa.me (оставляет только цифры)."""
+    digits = "".join(ch for ch in str(phone) if ch.isdigit())
+    return f"https://wa.me/{digits}" if digits else ""
+
+
 def main_menu_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🐾 Каталог животных", callback_data="catalog")],
@@ -319,13 +325,87 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"➖ Комиссия владельца (20%): {owner_commission}₪\n"
         f"<b>Доход платформы: {platform_income}₪</b>"
     )
+    admin_rows = [[
+        InlineKeyboardButton("✅ Подтвердить", callback_data=f"adm_ok:{req_id}"),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f"adm_no:{req_id}"),
+    ]]
+    owner_wa = whatsapp_link(owner.get("whatsapp", ""))
+    if owner_wa:
+        admin_rows.append([InlineKeyboardButton("💬 WhatsApp владельца", url=owner_wa)])
     try:
-        await context.bot.send_message(config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML")
+        await context.bot.send_message(
+            config.ADMIN_CHAT_ID,
+            admin_text,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(admin_rows),
+        )
     except Exception:
         logger.exception("Не удалось отправить уведомление администратору")
 
     context.user_data.clear()
     return ConversationHandler.END
+
+
+async def admin_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор нажал Подтвердить/Отклонить под заявкой."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, req_id = query.data.split(":", 1)
+    request = sheets.get_request(req_id)
+    if not request:
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_text(f"Заявка {req_id} не найдена в таблице.")
+        return
+
+    if action == "adm_ok":
+        new_status, badge = "подтверждена", "✅ ПОДТВЕРЖДЕНА"
+    else:
+        new_status, badge = "отклонена", "❌ ОТКЛОНЕНА"
+    sheets.update_request_status(req_id, new_status)
+
+    # Убираем кнопки и помечаем решение в тексте уведомления
+    await query.edit_message_text(
+        query.message.text_html + f"\n\n<b>{badge}</b>",
+        parse_mode="HTML",
+    )
+
+    # Сообщаем клиенту
+    client_id = str(request.get("клиент_tg_id", "")).strip()
+    if not client_id.isdigit():
+        return
+    animal = sheets.get_animal_by_id(str(request.get("животное_id", "")).strip()) or {}
+    owner = sheets.get_owner_by_id(str(animal.get("владелец_id", "")).strip()) or {}
+    try:
+        if action == "adm_ok":
+            keyboard = None
+            owner_wa = whatsapp_link(owner.get("whatsapp", ""))
+            if owner_wa:
+                keyboard = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("💬 Написать владельцу в WhatsApp", url=owner_wa)]]
+                )
+            await context.bot.send_message(
+                int(client_id),
+                f"🎉 Ваша заявка <b>{req_id}</b> подтверждена!\n\n"
+                f"🐾 {request.get('животное_имя', '')}\n"
+                f"📅 {request.get('дата_аренды', '')}\n\n"
+                "Свяжитесь с владельцем, чтобы договориться о деталях:",
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        else:
+            await context.bot.send_message(
+                int(client_id),
+                f"😔 К сожалению, заявка <b>{req_id}</b> отклонена — "
+                "выбранная дата недоступна.\n\n"
+                "Загляните в каталог: возможно, подойдёт другое животное 🐾",
+                parse_mode="HTML",
+            )
+    except Exception:
+        logger.exception("Не удалось уведомить клиента по заявке %s", req_id)
 
 
 async def request_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -369,6 +449,7 @@ def main():
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(request_conv)
+    app.add_handler(CallbackQueryHandler(admin_decision, pattern=r"^adm_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_error_handler(on_error)
     logger.info("Бот PetShare Israel запущен")
