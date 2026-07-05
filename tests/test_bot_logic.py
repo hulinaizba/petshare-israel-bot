@@ -304,6 +304,59 @@ def test_format_friend_card():
     assert "female" in text_en
 
 
+# ---------- Конные прогулки ----------
+
+HORSES = [
+    {"id": "HRS-001", "кличка": "Шира", "порода": "Арабская", "возраст": "7",
+     "город": "Северный округ", "характер": "спокойная", "новичкам": "да",
+     "цена_час": 150, "цена_закат": 220, "tg_id": 401, "телефон": "054",
+     "владелец_имя": "Рами", "статус": "проверен"},
+    {"id": "HRS-002", "кличка": "Буран", "порода": "Пони", "возраст": "5",
+     "город": "Центр", "характер": "игривый", "новичкам": "да",
+     "цена_час": 100, "цена_закат": "", "tg_id": 402, "телефон": "055",
+     "владелец_имя": "Лея", "статус": "на проверке"},
+]
+
+
+def test_only_verified_horses_listed():
+    put_cache(config.SHEET_HORSES, HORSES)
+    assert [h["id"] for h in sheets.get_horses()] == ["HRS-001"]
+    assert sheets.get_horse_any("HRS-002")["кличка"] == "Буран"
+
+
+def test_ride_price_by_time_of_day():
+    put_cache(config.SHEET_HORSES, HORSES)
+    # закат и рассвет — по закатному тарифу
+    assert bot.ride_price({"horse_id": "HRS-001", "tod": "закат"}) == 220
+    assert bot.ride_price({"horse_id": "HRS-001", "tod": "рассвет"}) == 220
+    # день и вечер — по часовому
+    assert bot.ride_price({"horse_id": "HRS-001", "tod": "день"}) == 150
+    assert bot.ride_price({"horse_id": "HRS-001", "tod": "вечер"}) == 150
+    # нет закатной цены — фолбэк на часовую
+    assert bot.ride_price({"horse_id": "HRS-002", "tod": "закат"}) == 100
+
+
+def test_ride_commission_math():
+    # 2 человека на закате по 220₪: 440₪, сбор 44₪, комиссия владельца 88₪
+    cost = 220 * 2
+    assert bot.compute_client_fee(cost) == 44
+    assert round(cost * bot.OWNER_COMMISSION) == 88
+
+
+def test_format_horse_card():
+    put_cache(config.SHEET_HORSES, HORSES)
+    text = bot.format_horse_card(HORSES[0], 1, 1, "ru")
+    assert "Шира" in text and "150₪" in text and "220₪" in text
+    text_en = bot.format_horse_card(HORSES[0], 1, 1, "en")
+    assert "Northern District" in text_en and "owner present" in text_en
+
+
+def test_resolve_msg_target_horse():
+    put_cache(config.SHEET_HORSES, HORSES)
+    tg, label, phone = bot.resolve_msg_target("h", "HRS-001")
+    assert tg == "401" and label == "Шира" and phone == "054"
+
+
 def test_resolve_msg_target():
     put_cache(config.SHEET_ANIMALS, ANIMALS)
     put_cache(config.SHEET_SITTERS, SITTERS)

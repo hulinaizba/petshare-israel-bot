@@ -305,6 +305,54 @@ def update_match_status(match_id, status):
     return _update_fields(config.SHEET_MATCHES, match_id, {"статус": status})
 
 
+# ---------- Конные прогулки ----------
+
+def get_horses():
+    """Проверенные лошади для каталога прогулок."""
+    horses = _get_records(config.SHEET_HORSES)
+    return [h for h in horses if str(h.get("статус", "")).strip() == "проверен"]
+
+
+def get_horse_any(horse_id):
+    for h in _get_records(config.SHEET_HORSES):
+        if str(h.get("id", "")).strip() == horse_id:
+            return h
+    return None
+
+
+def next_horse_id():
+    records = _get_records(config.SHEET_HORSES)
+    return f"HRS-{len(records) + 1:03d}"
+
+
+def add_horse(row):
+    _append_row(config.SHEET_HORSES, row)
+
+
+def update_horse_status(horse_id, status):
+    return _update_fields(config.SHEET_HORSES, horse_id, {"статус": status})
+
+
+def next_ride_id():
+    records = _get_records(config.SHEET_RIDES)
+    return f"RID-{len(records) + 1:03d}"
+
+
+def add_ride(row):
+    _append_row(config.SHEET_RIDES, row)
+
+
+def get_ride(ride_id):
+    for r in _get_records(config.SHEET_RIDES):
+        if str(r.get("id", "")).strip() == ride_id:
+            return r
+    return None
+
+
+def update_ride_status(ride_id, status):
+    return _update_fields(config.SHEET_RIDES, ride_id, {"статус": status})
+
+
 # ---------- Сообщения (переписка через бота) ----------
 
 def next_message_id():

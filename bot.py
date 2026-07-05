@@ -27,6 +27,7 @@ from telegram.ext import (
 )
 
 import config
+import i18n
 import sheets
 from i18n import LANGS, t, tr_value
 
@@ -79,6 +80,16 @@ BRD_PET, BRD_DATES, BRD_DAYS, BRD_CITY, BRD_NOTES, BRD_PHONE, BRD_CONFIRM = rang
 
 # Состояние написания сообщения (вопрос, ответ, пожелание)
 WRITE_MSG = 70
+
+# Состояния регистрации лошади
+(
+    HRS_NAME, HRS_PHONE, HRS_HORSENAME, HRS_BREED, HRS_AGE, HRS_CITY,
+    HRS_CHARACTER, HRS_BEGINNERS, HRS_PRICE_HOUR, HRS_PRICE_SUNSET,
+    HRS_PHOTO, HRS_CONFIRM,
+) = range(80, 92)
+
+# Состояния заявки на конную прогулку
+RID_TIME, RID_DATE, RID_PEOPLE, RID_EXP, RID_WISHES, RID_PHONE, RID_CONFIRM = range(100, 107)
 
 # Сервисный сбор за организацию вязки, ₪ (дружба — бесплатно)
 MATING_FEE = 50
@@ -141,10 +152,37 @@ def main_menu_keyboard(lang):
         [InlineKeyboardButton(t("btn_owner", lang), callback_data="owner_start")],
         [InlineKeyboardButton(t("btn_boarding", lang), callback_data="board_menu")],
         [InlineKeyboardButton(t("btn_friends", lang), callback_data="frd_menu")],
+        [InlineKeyboardButton(t("btn_horses", lang), callback_data="horses_menu")],
         [InlineKeyboardButton(t("btn_wish", lang), callback_data="wish")],
         [InlineKeyboardButton(t("btn_about", lang), callback_data="about")],
         [InlineKeyboardButton(t("btn_lang", lang), callback_data="lang")],
     ])
+
+
+def horses_menu_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_ride_book", lang), callback_data="hrscard:0")],
+        [InlineKeyboardButton(t("btn_horses_list", lang), callback_data="hrscard:0")],
+        [InlineKeyboardButton(t("btn_reg_horse", lang), callback_data="hrs_form")],
+        [InlineKeyboardButton(t("btn_menu", lang), callback_data="menu")],
+    ])
+
+
+def format_horse_card(horse, position, total, lang):
+    lines = [
+        f"🐴 <b>{horse.get('кличка', '')}</b> — {horse.get('порода', '')}",
+        "",
+        f"📍 {tr_value(horse.get('город', ''), lang)}   |   "
+        f"{t('card_age', lang)}: {horse.get('возраст', '')}",
+        f"😊 {t('card_character', lang)}: {horse.get('характер', '')}",
+        f"🔰 {t('hrs_card_beginners', lang)}: {tr_value(horse.get('новичкам', ''), lang)}",
+        f"💰 {horse.get('цена_час', '')}₪/{t('hrs_card_hour', lang)}   |   "
+        f"🌇 {t('hrs_card_sunset', lang)}: {horse.get('цена_закат', '')}₪",
+        t("card_accompany", lang),
+        "",
+        t("card_pos", lang, pos=position, total=total),
+    ]
+    return "\n".join(lines)
 
 
 def friends_menu_keyboard(lang):
@@ -405,6 +443,13 @@ async def cmd_friends(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_horses(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    await update.message.reply_text(
+        t("horses_menu", lang), reply_markup=horses_menu_keyboard(lang), parse_mode="HTML"
+    )
+
+
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс кэша таблицы (только для администратора)."""
     if update.effective_user.id != config.ADMIN_CHAT_ID:
@@ -503,6 +548,46 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "board_menu":
         await query.edit_message_text(
             t("board_menu", lang), reply_markup=board_menu_keyboard(lang), parse_mode="HTML"
+        )
+        return
+
+    if data == "horses_menu":
+        await query.edit_message_text(
+            t("horses_menu", lang), reply_markup=horses_menu_keyboard(lang), parse_mode="HTML"
+        )
+        return
+
+    if data.startswith("hrscard:"):
+        horses = sheets.get_horses()
+        if not horses:
+            await query.edit_message_text(
+                t("horses_empty", lang), reply_markup=horses_menu_keyboard(lang)
+            )
+            return
+        index = int(data.split(":", 1)[1]) % len(horses)
+        horse = horses[index]
+        total = len(horses)
+        rows = []
+        if total > 1:
+            rows.append([
+                InlineKeyboardButton("◀️", callback_data=f"hrscard:{(index - 1) % total}"),
+                InlineKeyboardButton(f"{index + 1}/{total}", callback_data="noop"),
+                InlineKeyboardButton("▶️", callback_data=f"hrscard:{(index + 1) % total}"),
+            ])
+        rows.append([InlineKeyboardButton(
+            t("btn_book_this", lang), callback_data=f"ridebook:{horse.get('id', '')}"
+        )])
+        rows.append([InlineKeyboardButton(
+            t("btn_ask", lang), callback_data=f"msg:h:{horse.get('id', '')}"
+        )])
+        rows.append([
+            InlineKeyboardButton(t("btn_horses", lang), callback_data="horses_menu"),
+            InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
+        ])
+        await query.edit_message_text(
+            format_horse_card(horse, index + 1, total, lang),
+            reply_markup=InlineKeyboardMarkup(rows),
+            parse_mode="HTML",
         )
         return
 
@@ -1938,6 +2023,13 @@ def resolve_msg_target(kind, obj_id):
             str(profile.get("кличка", "")).strip() or obj_id,
             profile.get("телефон", ""),
         )
+    if kind == "h":
+        horse = sheets.get_horse_any(obj_id) or {}
+        return (
+            str(horse.get("tg_id", "")).strip(),
+            str(horse.get("кличка", "")).strip() or obj_id,
+            horse.get("телефон", ""),
+        )
     return "", obj_id, ""
 
 
@@ -2051,6 +2143,462 @@ async def msg_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+# ---------- Регистрация лошади ----------
+
+async def horse_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["hrs_flow"] = {}
+    await query.message.reply_text(t("hrs_intro", L(context)), parse_mode="HTML")
+    return HRS_NAME
+
+
+async def horse_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["hrs_flow"]["name"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_phone", L(context)))
+    return HRS_PHONE
+
+
+async def horse_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["hrs_flow"]["phone"] = update.message.text.strip()
+    await update.message.reply_text(t("hrs_ask_horsename", L(context)))
+    return HRS_HORSENAME
+
+
+async def horse_horsename(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["hrs_flow"]["horse_name"] = update.message.text.strip()
+    await update.message.reply_text(t("hrs_ask_breed", L(context)))
+    return HRS_BREED
+
+
+async def horse_breed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["hrs_flow"]["breed"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_age", L(context)))
+    return HRS_AGE
+
+
+async def horse_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["hrs_flow"]["age"] = update.message.text.strip()
+    await update.message.reply_text(t("hrs_ask_city", L(context)))
+    return HRS_CITY
+
+
+async def horse_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["hrs_flow"]["city"] = update.message.text.strip()
+    await update.message.reply_text(t("hrs_ask_character", L(context)))
+    return HRS_CHARACTER
+
+
+async def horse_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    context.user_data["hrs_flow"]["character"] = update.message.text.strip()
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(t("btn_yes", lang), callback_data="hb:да"),
+        InlineKeyboardButton(t("btn_no", lang), callback_data="hb:нет"),
+    ]])
+    await update.message.reply_text(t("hrs_ask_beginners", lang), reply_markup=keyboard)
+    return HRS_BEGINNERS
+
+
+async def horse_beginners(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["hrs_flow"]["beginners"] = query.data.split(":", 1)[1]
+    await query.message.reply_text(t("hrs_ask_price_hour", L(context)))
+    return HRS_PRICE_HOUR
+
+
+async def horse_price_hour(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["hrs_flow"]["price_hour"] = parse_price(update.message.text)
+    await update.message.reply_text(t("hrs_ask_price_sunset", L(context)))
+    return HRS_PRICE_SUNSET
+
+
+async def horse_price_sunset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["hrs_flow"]["price_sunset"] = parse_price(update.message.text)
+    await update.message.reply_text(t("own_ask_photo", L(context)))
+    return HRS_PHOTO
+
+
+async def horse_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    flow = context.user_data["hrs_flow"]
+    flow["photo"] = update.message.photo[-1].file_id if update.message.photo else ""
+
+    summary = t(
+        "hrs_summary", lang,
+        name=flow["name"], phone=flow["phone"], horse_name=flow["horse_name"],
+        breed=flow["breed"], age=flow["age"], city=flow["city"],
+        character=flow["character"], beginners=tr_value(flow["beginners"], lang),
+        price_hour=flow["price_hour"], price_sunset=flow["price_sunset"],
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_own_send", lang), callback_data="hrs_send")],
+        [InlineKeyboardButton(t("btn_own_cancel", lang), callback_data="hrs_cancel")],
+    ])
+    if flow["photo"]:
+        await update.message.reply_photo(flow["photo"], caption=summary, reply_markup=keyboard)
+    else:
+        await update.message.reply_text(summary, reply_markup=keyboard)
+    return HRS_CONFIRM
+
+
+async def horse_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+
+    if query.data == "hrs_cancel":
+        await query.message.reply_text(t("own_cancelled", lang))
+        context.user_data.pop("hrs_flow", None)
+        return ConversationHandler.END
+
+    flow = context.user_data["hrs_flow"]
+    user = update.effective_user
+    horse_id = sheets.next_horse_id()
+    sheets.add_horse([
+        horse_id,
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        flow["name"], flow["phone"], user.id,
+        flow["horse_name"], flow["breed"], flow["age"], flow["city"],
+        flow["character"], flow["beginners"],
+        flow["price_hour"], flow["price_sunset"], flow["photo"],
+        "на проверке",
+    ])
+    await query.message.reply_text(t("own_sent", lang))
+
+    admin_text = (
+        "🔔 <b>Новая лошадь на проверку</b>\n\n"
+        f"👤 {flow['name']}, {flow['phone']} ({horse_id})\n"
+        f"🐴 {flow['horse_name']} — {flow['breed']}, {flow['age']}\n"
+        f"📍 {flow['city']}\n"
+        f"😊 {flow['character']}\n"
+        f"🔰 Новичкам: {flow['beginners']}\n"
+        f"💰 {flow['price_hour']}₪/час | 🌇 {flow['price_sunset']}₪\n\n"
+        "⚠️ Проверьте условия содержания и безопасность прогулок!"
+    )
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Одобрить", callback_data=f"hrs_ok:{horse_id}"),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f"hrs_no:{horse_id}"),
+    ]])
+    try:
+        if flow["photo"]:
+            await context.bot.send_photo(
+                config.ADMIN_CHAT_ID, flow["photo"], caption=admin_text,
+                parse_mode="HTML", reply_markup=keyboard,
+            )
+        else:
+            await context.bot.send_message(
+                config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML", reply_markup=keyboard,
+            )
+    except Exception:
+        logger.exception("Не удалось уведомить администратора о лошади")
+
+    context.user_data.pop("hrs_flow", None)
+    return ConversationHandler.END
+
+
+async def horse_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("hrs_flow", None)
+    await update.message.reply_text(
+        t("own_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
+async def admin_horse_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор одобряет/отклоняет лошадь."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, horse_id = query.data.split(":", 1)
+    horse = sheets.get_horse_any(horse_id)
+    if not horse:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "hrs_ok":
+        sheets.update_horse_status(horse_id, "проверен")
+        badge = "✅ ОДОБРЕНО"
+    else:
+        sheets.update_horse_status(horse_id, "отклонена")
+        badge = "❌ ОТКЛОНЕНО"
+
+    if query.message.photo:
+        await query.edit_message_caption(
+            caption=query.message.caption_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+        )
+    else:
+        await query.edit_message_text(
+            query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+        )
+
+    owner_tg = str(horse.get("tg_id", "")).strip()
+    if not owner_tg.isdigit():
+        return
+    own_lang = user_lang(context, owner_tg)
+    try:
+        key = "hrs_approved" if action == "hrs_ok" else "hrs_declined"
+        await context.bot.send_message(
+            int(owner_tg), t(key, own_lang, name=horse.get("кличка", ""))
+        )
+    except Exception:
+        logger.exception("Не удалось уведомить владельца лошади %s", owner_tg)
+
+
+# ---------- Заявка на конную прогулку ----------
+
+async def ride_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    horse_id = query.data.split(":", 1)[1]
+    horse = sheets.get_horse_any(horse_id)
+    if not horse:
+        await query.message.reply_text(t("horses_empty", lang))
+        return ConversationHandler.END
+    context.user_data["rid_flow"] = {"horse_id": horse_id, "horse": horse.get("кличка", "")}
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(t("btn_dawn", lang), callback_data="tod:рассвет"),
+            InlineKeyboardButton(t("btn_day", lang), callback_data="tod:день"),
+        ],
+        [
+            InlineKeyboardButton(t("btn_sunset", lang), callback_data="tod:закат"),
+            InlineKeyboardButton(t("btn_evening", lang), callback_data="tod:вечер"),
+        ],
+    ])
+    await query.message.reply_text(
+        t("rid_ask_time", lang, name=horse.get("кличка", "")), reply_markup=keyboard
+    )
+    return RID_TIME
+
+
+async def ride_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["rid_flow"]["tod"] = query.data.split(":", 1)[1]
+    await query.message.reply_text(t("rid_ask_date", L(context)), parse_mode="HTML")
+    return RID_DATE
+
+
+async def ride_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["rid_flow"]["date"] = update.message.text.strip()
+    await update.message.reply_text(t("rid_ask_people", L(context)))
+    return RID_PEOPLE
+
+
+async def ride_people(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    people = parse_price(update.message.text)
+    context.user_data["rid_flow"]["people"] = max(people, 1)
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(t("btn_beginner", lang), callback_data="rexp:новичок"),
+        InlineKeyboardButton(t("btn_experienced", lang), callback_data="rexp:опытный"),
+    ]])
+    await update.message.reply_text(t("rid_ask_exp", lang), reply_markup=keyboard)
+    return RID_EXP
+
+
+async def ride_exp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["rid_flow"]["exp"] = query.data.split(":", 1)[1]
+    await query.message.reply_text(t("rid_ask_wishes", L(context)))
+    return RID_WISHES
+
+
+async def ride_wishes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    context.user_data["rid_flow"]["wishes"] = update.message.text.strip()
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton(t("btn_send_phone", lang), request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+    await update.message.reply_text(t("req_ask_phone", lang), reply_markup=keyboard)
+    return RID_PHONE
+
+
+def ride_price(flow):
+    """Цена с человека: закат/рассвет — по закатному тарифу."""
+    horse = sheets.get_horse_any(flow.get("horse_id", "")) or {}
+    if flow.get("tod") in ("закат", "рассвет"):
+        return parse_price(horse.get("цена_закат")) or parse_price(horse.get("цена_час"))
+    return parse_price(horse.get("цена_час"))
+
+
+async def ride_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    flow = context.user_data["rid_flow"]
+    if update.message.contact:
+        flow["phone"] = update.message.contact.phone_number
+    else:
+        flow["phone"] = update.message.text.strip()
+
+    price = ride_price(flow)
+    people = flow["people"]
+    cost = price * people
+    fee = compute_client_fee(cost)
+
+    summary = t(
+        "rid_summary", lang,
+        horse=flow["horse"], tod=t(f"tod_{flow['tod']}", lang), date=flow["date"],
+        people=people, exp=t(f"exp_{flow['exp']}", lang), wishes=flow["wishes"],
+        phone=flow["phone"], price=price, cost=cost, fee=fee, total=cost + fee,
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_req_send", lang), callback_data="rid_confirm")],
+        [InlineKeyboardButton(t("btn_req_cancel", lang), callback_data="rid_cancel")],
+    ])
+    await update.message.reply_text(summary, reply_markup=keyboard, parse_mode="HTML")
+    await update.message.reply_text("👆", reply_markup=ReplyKeyboardRemove())
+    return RID_CONFIRM
+
+
+async def ride_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+
+    if query.data == "rid_cancel":
+        await query.edit_message_text(t("req_cancelled", lang))
+        context.user_data.pop("rid_flow", None)
+        return ConversationHandler.END
+
+    flow = context.user_data["rid_flow"]
+    user = update.effective_user
+    price = ride_price(flow)
+    people = flow["people"]
+    cost = price * people
+    client_fee = compute_client_fee(cost)
+    owner_commission = round(cost * OWNER_COMMISSION)
+    platform_income = client_fee + owner_commission
+
+    ride_id = sheets.next_ride_id()
+    client_name = user.full_name + (f" (@{user.username})" if user.username else "")
+    sheets.add_ride([
+        ride_id,
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        client_name,
+        flow["phone"],
+        user.id,
+        flow["horse_id"],
+        flow["horse"],
+        flow["tod"],
+        flow["date"],
+        people,
+        flow["exp"],
+        flow["wishes"],
+        price,
+        cost,
+        client_fee,
+        owner_commission,
+        platform_income,
+        "новая",
+    ])
+    await query.edit_message_text(t("rid_sent", lang, id=ride_id), parse_mode="HTML")
+
+    horse = sheets.get_horse_any(flow["horse_id"]) or {}
+    admin_text = (
+        f"🔔 <b>Новая заявка на прогулку {ride_id}</b>\n\n"
+        f"🐴 {flow['horse']} ({flow['horse_id']}), владелец: {horse.get('владелец_имя', '—')}, "
+        f"{horse.get('телефон', '—')}\n"
+        f"👤 Клиент: {client_name}, {flow['phone']}\n"
+        f"🕐 {flow['tod']}, {flow['date']}\n"
+        f"👥 Человек: {people} ({flow['exp']})\n"
+        f"📝 Пожелания: {flow['wishes']}\n\n"
+        f"💰 {people} × {price}₪ = {cost}₪\n"
+        f"➕ Сбор с клиента (10%): {client_fee}₪\n"
+        f"➖ Комиссия владельца (20%): {owner_commission}₪\n"
+        f"<b>Доход платформы: {platform_income}₪</b>"
+    )
+    admin_rows = [[
+        InlineKeyboardButton("✅ Подтвердить", callback_data=f"rid_ok:{ride_id}"),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f"rid_no:{ride_id}"),
+    ]]
+    horse_wa = whatsapp_link(horse.get("телефон", ""))
+    if horse_wa:
+        admin_rows.append([InlineKeyboardButton("💬 WhatsApp владельца", url=horse_wa)])
+    try:
+        await context.bot.send_message(
+            config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(admin_rows),
+        )
+    except Exception:
+        logger.exception("Не удалось уведомить администратора о прогулке")
+
+    context.user_data.pop("rid_flow", None)
+    return ConversationHandler.END
+
+
+async def ride_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("rid_flow", None)
+    await update.message.reply_text(
+        t("req_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
+async def admin_ride_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор подтверждает/отклоняет конную прогулку."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, ride_id = query.data.split(":", 1)
+    ride = sheets.get_ride(ride_id)
+    if not ride:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "rid_ok":
+        sheets.update_ride_status(ride_id, "подтверждена")
+        badge = "✅ ПОДТВЕРЖДЕНА"
+    else:
+        sheets.update_ride_status(ride_id, "отклонена")
+        badge = "❌ ОТКЛОНЕНА"
+    await query.edit_message_text(
+        query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+    )
+
+    client_id = str(ride.get("tg_id", "")).strip()
+    if not client_id.isdigit():
+        return
+    cli_lang = user_lang(context, client_id)
+    horse = sheets.get_horse_any(str(ride.get("лошадь_id", "")).strip()) or {}
+    try:
+        if action == "rid_ok":
+            keyboard = None
+            horse_wa = whatsapp_link(horse.get("телефон", ""))
+            if horse_wa:
+                keyboard = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton(t("btn_wa_owner", cli_lang), url=horse_wa)]]
+                )
+            tod = str(ride.get("время_суток", "")).strip()
+            tod_label = t(f"tod_{tod}", cli_lang) if f"tod_{tod}" in i18n.T else tod
+            await context.bot.send_message(
+                int(client_id),
+                t("cli_rid_confirmed", cli_lang, id=ride_id,
+                  horse=ride.get("кличка", ""), date=ride.get("дата", ""), tod=tod_label),
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        else:
+            await context.bot.send_message(
+                int(client_id),
+                t("cli_rid_declined", cli_lang, id=ride_id),
+                parse_mode="HTML",
+            )
+    except Exception:
+        logger.exception("Не удалось уведомить клиента по прогулке %s", ride_id)
+
+
 async def use_buttons_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Пользователь написал текст там, где ждём нажатие кнопки."""
     await update.message.reply_text(t("use_buttons", L(context)))
@@ -2095,6 +2643,7 @@ async def post_init(app):
         ("owner", "💼 Сдать питомца / List your pet / להשכיר"),
         ("boarding", "🏡 Передержка / Boarding / פנסיון"),
         ("friends", "💞 Знакомства / Matchmaking / היכרויות"),
+        ("horses", "🐴 Конные прогулки / Horse rides / רכיבה"),
         ("language", "🌐 Язык / Language / שפה"),
         ("help", "ℹ️ Как это работает / How it works / איך זה עובד"),
         ("cancel", "❌ Отмена / Cancel / ביטול"),
@@ -2237,6 +2786,7 @@ def main():
     app.add_handler(CommandHandler("filters", cmd_filters))
     app.add_handler(CommandHandler("boarding", cmd_boarding))
     app.add_handler(CommandHandler("friends", cmd_friends))
+    app.add_handler(CommandHandler("horses", cmd_horses))
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
@@ -2254,11 +2804,65 @@ def main():
         conversation_timeout=1800,
     )
 
+    horse_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(horse_start, pattern=r"^hrs_form$")],
+        states={
+            HRS_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_name)],
+            HRS_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_phone)],
+            HRS_HORSENAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_horsename)],
+            HRS_BREED: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_breed)],
+            HRS_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_age)],
+            HRS_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_city)],
+            HRS_CHARACTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_character)],
+            HRS_BEGINNERS: [
+                CallbackQueryHandler(horse_beginners, pattern=r"^hb:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            HRS_PRICE_HOUR: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_price_hour)],
+            HRS_PRICE_SUNSET: [MessageHandler(filters.TEXT & ~filters.COMMAND, horse_price_sunset)],
+            HRS_PHOTO: [MessageHandler(filters.PHOTO | (filters.TEXT & ~filters.COMMAND), horse_photo)],
+            HRS_CONFIRM: [
+                CallbackQueryHandler(horse_confirm, pattern=r"^hrs_(send|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", horse_cancel)],
+        conversation_timeout=1800,
+    )
+
+    ride_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(ride_start, pattern=r"^ridebook:")],
+        states={
+            RID_TIME: [
+                CallbackQueryHandler(ride_time, pattern=r"^tod:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            RID_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ride_date)],
+            RID_PEOPLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ride_people)],
+            RID_EXP: [
+                CallbackQueryHandler(ride_exp, pattern=r"^rexp:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            RID_WISHES: [MessageHandler(filters.TEXT & ~filters.COMMAND, ride_wishes)],
+            RID_PHONE: [MessageHandler(
+                (filters.TEXT & ~filters.COMMAND) | filters.CONTACT, ride_phone
+            )],
+            RID_CONFIRM: [
+                CallbackQueryHandler(ride_confirm, pattern=r"^rid_(confirm|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", ride_cancel)],
+        conversation_timeout=1800,
+    )
+
     app.add_handler(request_conv)
     app.add_handler(owner_conv)
     app.add_handler(sitter_conv)
     app.add_handler(boarding_conv)
     app.add_handler(friend_conv)
+    app.add_handler(horse_conv)
+    app.add_handler(ride_conv)
     app.add_handler(message_conv)
     app.add_handler(CallbackQueryHandler(admin_decision, pattern=r"^adm_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_owner_decision, pattern=r"^own_(ok|no):"))
@@ -2266,6 +2870,8 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_boarding_decision, pattern=r"^brd_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_friend_decision, pattern=r"^frd_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_match_decision, pattern=r"^mtc_(ok|no):"))
+    app.add_handler(CallbackQueryHandler(admin_horse_decision, pattern=r"^hrs_(ok|no):"))
+    app.add_handler(CallbackQueryHandler(admin_ride_decision, pattern=r"^rid_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_callback))
     # Страховка: /cancel вне анкет и любое непонятое сообщение — всегда есть ответ
     app.add_handler(CommandHandler("cancel", global_cancel))

@@ -101,6 +101,240 @@ T = {
         "en": "✅ Thank you! We received your request and will contact you 🐾",
         "he": "✅ תודה! קיבלנו את הבקשה וניצור קשר 🐾",
     },
+
+    # ---------- Конные прогулки ----------
+    "btn_horses": {"ru": "🐴 Конные прогулки", "en": "🐴 Horse rides", "he": "🐴 רכיבה על סוסים"},
+    "horses_menu": {
+        "ru": (
+            "🐴 <b>Конные прогулки</b>\n\n"
+            "🌅 Прогулка на рассвете, ☀️ днём или 🌇 на закате —\n"
+            "время подберём под вас, всегда в сопровождении владельца.\n"
+            "Подходит и новичкам, и опытным наездникам.\n\n"
+            "🐎 А если у вас есть лошадь — зарегистрируйте её\n"
+            "и зарабатывайте на прогулках!"
+        ),
+        "en": (
+            "🐴 <b>Horse rides</b>\n\n"
+            "🌅 A ride at dawn, ☀️ midday or 🌇 at sunset —\n"
+            "we adjust the time for you, always with the owner along.\n"
+            "Great for beginners and experienced riders alike.\n\n"
+            "🐎 And if you have a horse — register it\n"
+            "and earn on rides!"
+        ),
+        "he": (
+            "🐴 <b>רכיבה על סוסים</b>\n\n"
+            "🌅 רכיבה בזריחה, ☀️ בצהריים או 🌇 בשקיעה —\n"
+            "נתאים את הזמן בשבילכם, תמיד בליווי הבעלים.\n"
+            "מתאים למתחילים ולרוכבים מנוסים.\n\n"
+            "🐎 ואם יש לכם סוס — רשמו אותו\n"
+            "והרוויחו על רכיבות!"
+        ),
+    },
+    "btn_ride_book": {"ru": "🌅 Записаться на прогулку", "en": "🌅 Book a ride", "he": "🌅 להירשם לרכיבה"},
+    "btn_reg_horse": {"ru": "🐎 Зарегистрировать свою лошадь", "en": "🐎 Register your horse", "he": "🐎 לרשום את הסוס שלכם"},
+    "btn_horses_list": {"ru": "🐴 Смотреть лошадей", "en": "🐴 Browse horses", "he": "🐴 לצפות בסוסים"},
+    "horses_empty": {
+        "ru": "Лошадей в каталоге пока нет — загляните позже 🐴",
+        "en": "No horses in the catalog yet — come back later 🐴",
+        "he": "אין עדיין סוסים בקטלוג — חזרו מאוחר יותר 🐴",
+    },
+    "hrs_intro": {
+        "ru": (
+            "🐎 <b>Регистрация лошади для прогулок</b>\n\n"
+            "Все прогулки проходят в вашем сопровождении, цену назначаете вы.\n"
+            f"Комиссия сервиса — 20% с состоявшихся прогулок,\n"
+            "клиент дополнительно платит сервисный сбор 10%.\n\n"
+            "Как вас зовут?\n\nОтменить — /cancel"
+        ),
+        "en": (
+            "🐎 <b>Register your horse for rides</b>\n\n"
+            "All rides happen with you accompanying, you set the price.\n"
+            "Service commission — 20% of completed rides,\n"
+            "the client additionally pays a 10% service fee.\n\n"
+            "What is your name?\n\nCancel — /cancel"
+        ),
+        "he": (
+            "🐎 <b>רישום סוס לרכיבות</b>\n\n"
+            "כל הרכיבות בליווי שלכם, אתם קובעים את המחיר.\n"
+            "עמלת השירות — 20% מרכיבות שהתקיימו,\n"
+            "הלקוח משלם בנוסף עמלת שירות של 10%.\n\n"
+            "איך קוראים לכם?\n\nלביטול — /cancel"
+        ),
+    },
+    "hrs_ask_horsename": {"ru": "Кличка лошади?", "en": "Your horse's name?", "he": "שם הסוס?"},
+    "hrs_ask_breed": {"ru": "Порода лошади?", "en": "Horse breed?", "he": "גזע הסוס?"},
+    "hrs_ask_city": {
+        "ru": "Где проходят прогулки? (город/ферма/конюшня)",
+        "en": "Where do the rides take place? (city/farm/stable)",
+        "he": "איפה מתקיימות הרכיבות? (עיר/חווה/אורווה)",
+    },
+    "hrs_ask_character": {
+        "ru": "Характер лошади? (например: спокойная, привыкла к новичкам)",
+        "en": "The horse's character? (e.g.: calm, used to beginners)",
+        "he": "האופי של הסוס? (לדוגמה: רגוע, רגיל למתחילים)",
+    },
+    "hrs_ask_beginners": {
+        "ru": "Подходит ли лошадь новичкам без опыта?",
+        "en": "Is the horse suitable for beginners?",
+        "he": "האם הסוס מתאים למתחילים?",
+    },
+    "hrs_ask_price_hour": {
+        "ru": "Цена за час прогулки с человека, ₪? (только число)",
+        "en": "Price per hour per person, ₪? (number only)",
+        "he": "מחיר לשעה לאדם, ₪? (מספר בלבד)",
+    },
+    "hrs_ask_price_sunset": {
+        "ru": "Цена за закатную/рассветную прогулку с человека, ₪? (обычно дороже — это самый популярный формат 🌇)",
+        "en": "Price for a sunset/dawn ride per person, ₪? (usually higher — the most popular format 🌇)",
+        "he": "מחיר לרכיבת שקיעה/זריחה לאדם, ₪? (בדרך כלל יקר יותר — הפורמט המבוקש ביותר 🌇)",
+    },
+    "hrs_summary": {
+        "ru": (
+            "Проверьте анкету лошади:\n\n"
+            "👤 Владелец: {name}, {phone}\n"
+            "🐴 {horse_name} — {breed}, возраст: {age}\n"
+            "📍 {city}\n"
+            "😊 {character}\n"
+            "🔰 Подходит новичкам: {beginners}\n"
+            "💰 {price_hour}₪/час с человека | 🌇 закат: {price_sunset}₪\n\n"
+            "💳 Напоминание: комиссия сервиса 20% с состоявшихся прогулок.\n\n"
+            "Отправить на проверку?"
+        ),
+        "en": (
+            "Please check the horse profile:\n\n"
+            "👤 Owner: {name}, {phone}\n"
+            "🐴 {horse_name} — {breed}, age: {age}\n"
+            "📍 {city}\n"
+            "😊 {character}\n"
+            "🔰 Beginner-friendly: {beginners}\n"
+            "💰 {price_hour}₪/hour per person | 🌇 sunset: {price_sunset}₪\n\n"
+            "💳 Reminder: 20% service commission on completed rides.\n\n"
+            "Send for review?"
+        ),
+        "he": (
+            "בדקו את פרופיל הסוס:\n\n"
+            "👤 בעלים: {name}, {phone}\n"
+            "🐴 {horse_name} — {breed}, גיל: {age}\n"
+            "📍 {city}\n"
+            "😊 {character}\n"
+            "🔰 מתאים למתחילים: {beginners}\n"
+            "💰 {price_hour}₪ לשעה לאדם | 🌇 שקיעה: {price_sunset}₪\n\n"
+            "💳 תזכורת: עמלת שירות 20% מרכיבות שהתקיימו.\n\n"
+            "לשלוח לבדיקה?"
+        ),
+    },
+    "hrs_approved": {
+        "ru": "🎉 Лошадь «{name}» одобрена и уже в каталоге прогулок!",
+        "en": "🎉 Horse “{name}” is approved and already in the rides catalog!",
+        "he": "🎉 הסוס «{name}» אושר וכבר בקטלוג הרכיבות!",
+    },
+    "hrs_declined": {
+        "ru": "😔 Анкета лошади «{name}» отклонена. Свяжитесь с нами для деталей.",
+        "en": "😔 The profile of horse “{name}” was declined. Contact us for details.",
+        "he": "😔 הפרופיל של הסוס «{name}» נדחה. צרו קשר לפרטים.",
+    },
+    "hrs_card_beginners": {"ru": "Подходит новичкам", "en": "Beginner-friendly", "he": "מתאים למתחילים"},
+    "hrs_card_hour": {"ru": "час с человека", "en": "hour per person", "he": "שעה לאדם"},
+    "hrs_card_sunset": {"ru": "закат/рассвет", "en": "sunset/dawn", "he": "שקיעה/זריחה"},
+    "btn_book_this": {"ru": "🌅 Записаться", "en": "🌅 Book", "he": "🌅 להירשם"},
+
+    # Заявка на прогулку
+    "rid_ask_time": {
+        "ru": "🐴 Запись на прогулку с «{name}»\n\nКакое время суток вам подходит?",
+        "en": "🐴 Booking a ride with “{name}”\n\nWhat time of day suits you?",
+        "he": "🐴 הרשמה לרכיבה עם «{name}»\n\nאיזה זמן ביום מתאים לכם?",
+    },
+    "btn_dawn": {"ru": "🌅 Рассвет", "en": "🌅 Dawn", "he": "🌅 זריחה"},
+    "btn_day": {"ru": "☀️ День", "en": "☀️ Daytime", "he": "☀️ יום"},
+    "btn_sunset": {"ru": "🌇 Закат", "en": "🌇 Sunset", "he": "🌇 שקיעה"},
+    "btn_evening": {"ru": "🌙 Вечер", "en": "🌙 Evening", "he": "🌙 ערב"},
+    "tod_рассвет": {"ru": "рассвет", "en": "dawn", "he": "זריחה"},
+    "tod_день": {"ru": "день", "en": "daytime", "he": "יום"},
+    "tod_закат": {"ru": "закат", "en": "sunset", "he": "שקיעה"},
+    "tod_вечер": {"ru": "вечер", "en": "evening", "he": "ערב"},
+    "rid_ask_date": {
+        "ru": "На какую дату? Точное время обговорим и подтвердим 🕐\nНапример: <i>20.07 или «ближайшие выходные»</i>",
+        "en": "What date? We will agree on the exact time later 🕐\nFor example: <i>20.07 or “next weekend”</i>",
+        "he": "לאיזה תאריך? את השעה המדויקת נתאם ונאשר 🕐\nלדוגמה: <i>20.07 או «סוף השבוע הקרוב»</i>",
+    },
+    "rid_ask_people": {
+        "ru": "Сколько человек поедет? (только число)",
+        "en": "How many people will ride? (number only)",
+        "he": "כמה אנשים ירכבו? (מספר בלבד)",
+    },
+    "rid_ask_exp": {
+        "ru": "Какой у вас опыт верховой езды?",
+        "en": "What is your riding experience?",
+        "he": "מה ניסיון הרכיבה שלכם?",
+    },
+    "btn_beginner": {"ru": "🔰 Новичок", "en": "🔰 Beginner", "he": "🔰 מתחיל"},
+    "btn_experienced": {"ru": "🏇 Опытный", "en": "🏇 Experienced", "he": "🏇 מנוסה"},
+    "exp_новичок": {"ru": "новичок", "en": "beginner", "he": "מתחיל"},
+    "exp_опытный": {"ru": "опытный", "en": "experienced", "he": "מנוסה"},
+    "rid_ask_wishes": {
+        "ru": "Особые пожелания? 📸 Фотосессия, пикник, сюрприз для второй половинки...\nЕсли нет — напишите «нет»",
+        "en": "Special wishes? 📸 A photo shoot, picnic, surprise for a loved one...\nIf none — type “no”",
+        "he": "בקשות מיוחדות? 📸 צילומים, פיקניק, הפתעה לבן/בת הזוג...\nאם אין — כתבו «אין»",
+    },
+    "rid_summary": {
+        "ru": (
+            "Проверьте заявку на прогулку:\n\n"
+            "🐴 Лошадь: <b>{horse}</b>\n"
+            "🕐 Время суток: {tod}\n"
+            "📅 Дата: {date} (точное время подтвердим)\n"
+            "👥 Человек: {people}\n"
+            "🏇 Опыт: {exp}\n"
+            "📝 Пожелания: {wishes}\n"
+            "📱 Телефон: {phone}\n\n"
+            "💰 {people} × {price}₪ = {cost}₪\n"
+            "➕ Сервисный сбор (10%): {fee}₪\n"
+            "<b>Итого: {total}₪</b>\n\n"
+            "Оплата — после подтверждения."
+        ),
+        "en": (
+            "Please check your ride request:\n\n"
+            "🐴 Horse: <b>{horse}</b>\n"
+            "🕐 Time of day: {tod}\n"
+            "📅 Date: {date} (exact time to be confirmed)\n"
+            "👥 People: {people}\n"
+            "🏇 Experience: {exp}\n"
+            "📝 Wishes: {wishes}\n"
+            "📱 Phone: {phone}\n\n"
+            "💰 {people} × {price}₪ = {cost}₪\n"
+            "➕ Service fee (10%): {fee}₪\n"
+            "<b>Total: {total}₪</b>\n\n"
+            "Payment — after confirmation."
+        ),
+        "he": (
+            "בדקו את בקשת הרכיבה:\n\n"
+            "🐴 סוס: <b>{horse}</b>\n"
+            "🕐 זמן ביום: {tod}\n"
+            "📅 תאריך: {date} (השעה המדויקת תאושר)\n"
+            "👥 אנשים: {people}\n"
+            "🏇 ניסיון: {exp}\n"
+            "📝 בקשות: {wishes}\n"
+            "📱 טלפון: {phone}\n\n"
+            "💰 {people} × {price}₪ = {cost}₪\n"
+            "➕ עמלת שירות (10%): {fee}₪\n"
+            "<b>סה\"כ: {total}₪</b>\n\n"
+            "התשלום — לאחר האישור."
+        ),
+    },
+    "rid_sent": {
+        "ru": "✅ Заявка <b>{id}</b> отправлена!\n\nВладелец подтвердит дату, и мы согласуем точное время 🐴",
+        "en": "✅ Request <b>{id}</b> sent!\n\nThe owner will confirm the date and we will agree on the exact time 🐴",
+        "he": "✅ הבקשה <b>{id}</b> נשלחה!\n\nהבעלים יאשר את התאריך ונתאם את השעה המדויקת 🐴",
+    },
+    "cli_rid_confirmed": {
+        "ru": "🎉 Прогулка <b>{id}</b> подтверждена!\n\n🐴 {horse}, {date} ({tod})\n\nСвяжитесь с владельцем, чтобы согласовать точное время и место встречи:",
+        "en": "🎉 Ride <b>{id}</b> confirmed!\n\n🐴 {horse}, {date} ({tod})\n\nContact the owner to agree on the exact time and meeting point:",
+        "he": "🎉 הרכיבה <b>{id}</b> אושרה!\n\n🐴 {horse}, {date} ({tod})\n\nצרו קשר עם הבעלים לתיאום השעה ומקום המפגש:",
+    },
+    "cli_rid_declined": {
+        "ru": "😔 К сожалению, прогулка <b>{id}</b> не подтверждена — дата занята.\n\nПопробуйте другую дату или другую лошадь 🐴",
+        "en": "😔 Unfortunately, ride <b>{id}</b> was not confirmed — the date is taken.\n\nTry another date or another horse 🐴",
+        "he": "😔 לצערנו הרכיבה <b>{id}</b> לא אושרה — התאריך תפוס.\n\nנסו תאריך אחר או סוס אחר 🐴",
+    },
     "lang_set": {
         "ru": "✅ Язык переключён на русский.",
         "en": "✅ Language switched to English.",
