@@ -138,25 +138,58 @@ def test_format_card_no_accompaniment_for_safe():
     assert "сопровождением владельца" not in text
 
 
-# ---------- Приветствие ----------
+# ---------- Тексты и переводы ----------
+
+import i18n
+
 
 def test_welcome_mentions_owners():
-    assert "Для владельцев" in bot.WELCOME_TEXT
-    assert "АКЦИЯ" not in bot.WELCOME_TEXT
+    welcome_ru = i18n.t("welcome", "ru")
+    assert "Для владельцев" in welcome_ru
+    assert "АКЦИЯ" not in welcome_ru
 
 
 def test_about_owner_section_first():
-    assert "питомец может работать" in bot.ABOUT_TEXT
+    about_ru = i18n.t("about", "ru")
+    assert "питомец может работать" in about_ru
     # блок владельца идёт раньше блока для клиентов
-    assert bot.ABOUT_TEXT.index("питомец может работать") < bot.ABOUT_TEXT.index("провести время с животным")
-    assert "20%" in bot.ABOUT_TEXT
-    assert "10%" in bot.ABOUT_TEXT
+    assert about_ru.index("питомец может работать") < about_ru.index("провести время с животным")
+    assert "20%" in about_ru
+    assert "10%" in about_ru
 
 
 def test_about_mentions_scenarios():
-    assert "Тест-драйв породы" in bot.ABOUT_TEXT
-    assert "Прогулки" in bot.ABOUT_TEXT
-    assert "Конные прогулки" in bot.ABOUT_TEXT
+    about_ru = i18n.t("about", "ru")
+    assert "Тест-драйв породы" in about_ru
+    assert "Прогулки" in about_ru
+    assert "Конные прогулки" in about_ru
     # конкретных сумм заработка в тексте нет — цену назначает владелец
-    assert "от 45" not in bot.ABOUT_TEXT
-    assert "Цену назначаете вы" in bot.ABOUT_TEXT
+    assert "от 45" not in about_ru
+    assert "Цену назначаете вы" in about_ru
+
+
+def test_all_keys_have_all_languages():
+    for key, entry in i18n.T.items():
+        for lang in i18n.LANGS:
+            assert entry.get(lang), f"нет перевода {key}/{lang}"
+
+
+def test_t_falls_back_to_russian():
+    assert i18n.t("welcome", "xx") == i18n.t("welcome", "ru")
+
+
+def test_t_formats_placeholders():
+    assert "REQ-001" in i18n.t("req_sent", "en", id="REQ-001")
+    assert "5" in i18n.t("card_pos", "he", pos=5, total=8)
+
+
+def test_format_card_in_english():
+    text = bot.format_card(ANIMALS[0], 1, 2, "en")
+    assert "Луна" in text          # данные из таблицы — как есть
+    assert "Card 1 of 2" in text   # интерфейс — на английском
+    assert "hour" in text
+
+
+def test_format_card_in_hebrew():
+    text = bot.format_card(ANIMALS[0], 1, 2, "he")
+    assert "כרטיס" in text

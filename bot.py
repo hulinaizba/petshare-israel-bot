@@ -1,5 +1,6 @@
 """Telegram-бот PetShare Israel: каталог животных и заявки на аренду.
 
+Интерфейс: русский / английский / иврит (i18n.py).
 Запуск: ./venv/bin/python bot.py
 """
 
@@ -21,11 +22,13 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
+    PicklePersistence,
     filters,
 )
 
 import config
 import sheets
+from i18n import LANGS, t
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -60,6 +63,19 @@ REQ_DATE, REQ_PHONE, REQ_CONFIRM = range(3)
 ) = range(10, 25)
 
 
+def L(context):
+    """Язык текущего пользователя."""
+    return context.user_data.get("lang", "ru")
+
+
+def user_lang(context, tg_id):
+    """Язык другого пользователя по его id (для уведомлений)."""
+    try:
+        return context.application.user_data.get(int(tg_id), {}).get("lang", "ru")
+    except (ValueError, TypeError):
+        return "ru"
+
+
 def parse_price(value):
     try:
         return int(str(value).strip())
@@ -78,21 +94,53 @@ def compute_client_fee(price):
     return round(price * CLIENT_FEE)
 
 
-def main_menu_keyboard():
+def language_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🐾 Каталог животных", callback_data="catalog")],
-        [InlineKeyboardButton("🔍 Подбор по фильтрам", callback_data="filters")],
-        [InlineKeyboardButton("💼 Сдать питомца в аренду", callback_data="owner_start")],
-        [InlineKeyboardButton("ℹ️ Как это работает", callback_data="about")],
+        [InlineKeyboardButton(label, callback_data=f"lang_set:{code}")]
+        for code, label in LANGS.items()
     ])
+
+
+def main_menu_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_catalog", lang), callback_data="catalog")],
+        [InlineKeyboardButton(t("btn_filters", lang), callback_data="filters")],
+        [InlineKeyboardButton(t("btn_owner", lang), callback_data="owner_start")],
+        [InlineKeyboardButton(t("btn_about", lang), callback_data="about")],
+        [InlineKeyboardButton(t("btn_lang", lang), callback_data="lang")],
+    ])
+
+
+def about_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_fill_form", lang), callback_data="owner_start")],
+        [InlineKeyboardButton(t("btn_open_catalog", lang), callback_data="catalog")],
+        [InlineKeyboardButton(t("btn_menu", lang), callback_data="menu")],
+    ])
+
+
+def catalog_keyboard(lang):
+    """Клавиатура выбора категории; None — если каталог пуст."""
+    categories = sheets.get_categories()
+    if not categories:
+        return None
+    rows = [
+        [InlineKeyboardButton(
+            f"{CATEGORY_EMOJI.get(cat, '🐾')} {cat}",
+            callback_data=f"card:{cat}:0",
+        )]
+        for cat in categories
+    ]
+    rows.append([InlineKeyboardButton(t("btn_menu", lang), callback_data="menu")])
+    return InlineKeyboardMarkup(rows)
 
 
 # ---------- Фильтры ----------
 
-PRICE_OPTIONS = {
-    "any": ("любая", None),
-    "low": ("до 100₪/час", lambda p: p <= 100),
-    "high": ("от 100₪/час", lambda p: p > 100),
+PRICE_CHECKS = {
+    "any": None,
+    "low": lambda p: p <= 100,
+    "high": lambda p: p > 100,
 }
 
 
@@ -110,7 +158,7 @@ def apply_filters(animals, filt):
     for a in animals:
         if filt["city"] != "any" and str(a.get("город", "")).strip() != filt["city"]:
             continue
-        price_check = PRICE_OPTIONS[filt["price"]][1]
+        price_check = PRICE_CHECKS[filt["price"]]
         if price_check and not price_check(parse_price(a.get("цена_час"))):
             continue
         if filt["kids"] == "да" and str(a.get("можно_детям", "")).strip().lower() != "да":
@@ -121,54 +169,56 @@ def apply_filters(animals, filt):
 
 def filter_menu(context):
     """Текст и клавиатура экрана фильтров."""
+    lang = L(context)
     filt = get_filters(context)
-    city_label = "любой" if filt["city"] == "any" else filt["city"]
-    price_label = PRICE_OPTIONS[filt["price"]][0]
-    kids_label = "не важно" if filt["kids"] == "any" else "только да"
+    city_label = t("any_city", lang) if filt["city"] == "any" else filt["city"]
+    price_label = t(f"price_{filt['price']}", lang)
+    kids_label = t("kids_any", lang) if filt["kids"] == "any" else t("kids_only_yes", lang)
     count = len(apply_filters(sheets.get_animals(), filt))
     text = (
-        "🔍 <b>Подбор по фильтрам</b>\n\n"
-        f"📍 Город: <b>{city_label}</b>\n"
-        f"💰 Цена: <b>{price_label}</b>\n"
-        f"👶 Можно детям: <b>{kids_label}</b>\n\n"
-        f"Найдено животных: <b>{count}</b>"
+        f"{t('flt_title', lang)}\n\n"
+        f"{t('flt_city', lang)}: <b>{city_label}</b>\n"
+        f"{t('flt_price', lang)}: <b>{price_label}</b>\n"
+        f"{t('flt_kids', lang)}: <b>{kids_label}</b>\n\n"
+        f"{t('flt_found', lang, count=count)}"
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📍 Выбрать город", callback_data="f_city")],
-        [InlineKeyboardButton("💰 Выбрать цену", callback_data="f_price")],
-        [InlineKeyboardButton("👶 Можно детям: да/не важно", callback_data="f_kids")],
-        [InlineKeyboardButton(f"✅ Показать ({count})", callback_data="fcard:0")],
+        [InlineKeyboardButton(t("btn_flt_city", lang), callback_data="f_city")],
+        [InlineKeyboardButton(t("btn_flt_price", lang), callback_data="f_price")],
+        [InlineKeyboardButton(t("btn_flt_kids", lang), callback_data="f_kids")],
+        [InlineKeyboardButton(t("btn_flt_show", lang, count=count), callback_data="fcard:0")],
         [
-            InlineKeyboardButton("♻️ Сбросить", callback_data="f_reset"),
-            InlineKeyboardButton("🏠 Меню", callback_data="menu"),
+            InlineKeyboardButton(t("btn_flt_reset", lang), callback_data="f_reset"),
+            InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
         ],
     ])
     return text, keyboard
 
 
-def format_card(animal, position, total):
+def format_card(animal, position, total, lang="ru"):
     """Собирает текст карточки животного."""
     risk = str(animal.get("уровень_риска", "")).strip()
     lines = [
         f"🐾 <b>{animal.get('имя', '')}</b> — {animal.get('порода', '')}",
         "",
-        f"📍 {animal.get('город', '')}   |   возраст: {animal.get('возраст', '')}",
-        f"💰 {animal.get('цена_час', '')}₪/час   |   {animal.get('цена_событие', '')}₪/мероприятие",
-        f"😊 Характер: {animal.get('темперамент', '')}",
-        f"⭐ Умеет: {animal.get('навыки', '')}",
-        f"{RISK_EMOJI.get(risk, '⚪')} Уровень риска: {risk}",
-        f"👶 Можно детям: {animal.get('можно_детям', '')}",
+        f"📍 {animal.get('город', '')}   |   {t('card_age', lang)}: {animal.get('возраст', '')}",
+        f"💰 {animal.get('цена_час', '')}₪/{t('card_hour', lang)}   |   "
+        f"{animal.get('цена_событие', '')}₪/{t('card_event', lang)}",
+        f"😊 {t('card_character', lang)}: {animal.get('темперамент', '')}",
+        f"⭐ {t('card_skills', lang)}: {animal.get('навыки', '')}",
+        f"{RISK_EMOJI.get(risk, '⚪')} {t('card_risk', lang)}: {risk}",
+        f"👶 {t('card_kids', lang)}: {animal.get('можно_детям', '')}",
     ]
     if str(animal.get("сопровождение_владельца", "")).strip().lower() == "да":
-        lines.append("👤 Только с сопровождением владельца")
+        lines.append(t("card_accompany", lang))
     description = str(animal.get("описание", "")).strip()
     if description:
         lines += ["", f"<i>{description}</i>"]
-    lines += ["", f"Карточка {position} из {total}"]
+    lines += ["", t("card_pos", lang, pos=position, total=total)]
     return "\n".join(lines)
 
 
-def card_keyboard(category, index, total, animal_id):
+def card_keyboard(category, index, total, animal_id, lang):
     """Кнопки под карточкой: листание и заявка."""
     nav = []
     if total > 1:
@@ -182,110 +232,41 @@ def card_keyboard(category, index, total, animal_id):
     rows = []
     if nav:
         rows.append(nav)
-    rows.append([InlineKeyboardButton("📩 Оставить заявку", callback_data=f"request:{animal_id}")])
+    rows.append([InlineKeyboardButton(t("btn_request", lang), callback_data=f"request:{animal_id}")])
     rows.append([
-        InlineKeyboardButton("🔙 Категории", callback_data="catalog"),
-        InlineKeyboardButton("🏠 Меню", callback_data="menu"),
+        InlineKeyboardButton(t("btn_categories", lang), callback_data="catalog"),
+        InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
     ])
     return InlineKeyboardMarkup(rows)
 
 
-WELCOME_TEXT = (
-    "🐾 <b>PetShare Israel</b>\n"
-    "<i>Время с животными — без забот владения</i>\n"
-    "━━━━━━━━━━━━━━━━━━\n\n"
-    "🚶 Погулять с собакой, о которой давно мечтаете?\n"
-    "🐴 Покататься на лошади на закате?\n"
-    "🤔 Понять, ваша ли это порода, до покупки щенка?\n"
-    "📸 Фотосессия с альпакой или праздник с корги?\n\n"
-    "Всё это — здесь, за пару кликов!\n\n"
-    "✨ <b>Для вас:</b>\n"
-    "🔹 Проверенные животные с документами\n"
-    "🔹 Владелец рядом, инструкции и поддержка\n"
-    "🔹 Заявка за 2 минуты прямо в боте\n\n"
-    "💼 <b>Для владельцев питомцев:</b>\n"
-    "Ваш любимец может «работать» и приносить доход в дом.\n"
-    "Цену назначаете вы. Анкета — 3 минуты!\n"
-    "━━━━━━━━━━━━━━━━━━"
-)
-
-
-ABOUT_TEXT = (
-    "ℹ️ <b>Как это работает</b>\n"
-    "━━━━━━━━━━━━━━━━━━\n\n"
-    "💼 <b>Ваш питомец может работать!</b>\n\n"
-    "Да-да, домашние животные тоже могут приносить доход в дом 😄\n"
-    "Людям нужны не только съёмки — им нужны эмоции и общение\n"
-    "с животными, которых у них нет:\n\n"
-    "🚶 <b>Прогулки</b> — с вашей собакой погуляет тот,\n"
-    "кто мечтает о такой же, но не может завести\n"
-    "🤔 <b>«Тест-драйв породы»</b> — человек сомневается,\n"
-    "заводить ли щенка. Знакомится с вашим питомцем —\n"
-    "и принимает взвешенное решение\n"
-    "🐴 <b>Конные прогулки</b> — катание и фото с лошадьми\n"
-    "📸 <b>События</b> — фотосессии, детские праздники,\n"
-    "свадьбы, реклама\n\n"
-    "Цену назначаете вы сами — за час или за событие.\n\n"
-    "Как начать:\n"
-    "1️⃣ Заполняете анкету в боте — 3 минуты\n"
-    "2️⃣ Мы проверяем данные и документы (прививки, ветпаспорт)\n"
-    "3️⃣ Питомец появляется в каталоге\n"
-    "4️⃣ Получаете заявки и зарабатываете 💰\n\n"
-    "Вы всегда рядом со своим питомцем, все условия — по договору,\n"
-    f"комиссия платформы {int(OWNER_COMMISSION * 100)}% только с состоявшихся аренд.\n\n"
-    "━━━━━━━━━━━━━━━━━━\n\n"
-    "🐾 <b>Хотите провести время с животным?</b>\n\n"
-    "Не только «для дела» — можно просто для души:\n"
-    "🔹 погулять с собакой, о которой мечтаете\n"
-    "🔹 покататься на лошади\n"
-    "🔹 «примерить» породу перед покупкой щенка\n"
-    "🔹 устроить праздник, фотосессию или сюрприз близким\n\n"
-    "1️⃣ Выбираете в каталоге или через фильтры\n"
-    "2️⃣ Оставляете заявку прямо в боте\n"
-    "3️⃣ Владелец подтверждает дату и время\n"
-    "4️⃣ Встречаетесь и наслаждаетесь 🐾\n\n"
-    "📋 У всех животных есть ветеринарные документы.\n"
-    "🛡 Для крупных и экзотических — сопровождение владельца.\n"
-    f"💳 К цене аренды добавляется сервисный сбор {int(CLIENT_FEE * 100)}%."
-)
-
-
-def catalog_keyboard():
-    """Клавиатура выбора категории; None — если каталог пуст."""
-    categories = sheets.get_categories()
-    if not categories:
-        return None
-    rows = [
-        [InlineKeyboardButton(
-            f"{CATEGORY_EMOJI.get(cat, '🐾')} {cat}",
-            callback_data=f"card:{cat}:0",
-        )]
-        for cat in categories
-    ]
-    rows.append([InlineKeyboardButton("🏠 Меню", callback_data="menu")])
-    return InlineKeyboardMarkup(rows)
-
-
-def about_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("💼 Заполнить анкету питомца", callback_data="owner_start")],
-        [InlineKeyboardButton("🐾 Открыть каталог", callback_data="catalog")],
-        [InlineKeyboardButton("🏠 Меню", callback_data="menu")],
-    ])
-
+# ---------- Команды ----------
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if "lang" not in context.user_data:
+        await update.message.reply_text(
+            t("choose_lang", "ru"), reply_markup=language_keyboard()
+        )
+        return
+    lang = L(context)
     await update.message.reply_text(
-        WELCOME_TEXT, reply_markup=main_menu_keyboard(), parse_mode="HTML"
+        t("welcome", lang), reply_markup=main_menu_keyboard(lang), parse_mode="HTML"
+    )
+
+
+async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        t("choose_lang", L(context)), reply_markup=language_keyboard()
     )
 
 
 async def cmd_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = catalog_keyboard()
+    lang = L(context)
+    keyboard = catalog_keyboard(lang)
     if keyboard is None:
-        await update.message.reply_text("Каталог пока пуст, загляните позже 🐾")
+        await update.message.reply_text(t("catalog_empty", lang))
         return
-    await update.message.reply_text("Выберите категорию:", reply_markup=keyboard)
+    await update.message.reply_text(t("choose_category", lang), reply_markup=keyboard)
 
 
 async def cmd_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -294,52 +275,79 @@ async def cmd_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
     await update.message.reply_text(
-        ABOUT_TEXT, reply_markup=about_keyboard(), parse_mode="HTML"
+        t("about", lang), reply_markup=about_keyboard(lang), parse_mode="HTML"
     )
 
+
+async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сброс кэша таблицы (только для администратора)."""
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        return
+    sheets.clear_cache()
+    await update.message.reply_text("♻️ Кэш сброшен, данные перечитаются из таблицы.")
+
+
+# ---------- Кнопки (общий обработчик) ----------
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
+    lang = L(context)
     await query.answer()
 
     if data == "noop":
         return
 
+    if data == "lang":
+        await query.edit_message_text(
+            t("choose_lang", lang), reply_markup=language_keyboard()
+        )
+        return
+
+    if data.startswith("lang_set:"):
+        new_lang = data.split(":", 1)[1]
+        context.user_data["lang"] = new_lang
+        await query.edit_message_text(t("lang_set", new_lang))
+        await query.message.reply_text(
+            t("welcome", new_lang),
+            reply_markup=main_menu_keyboard(new_lang),
+            parse_mode="HTML",
+        )
+        return
+
     if data == "menu":
         await query.edit_message_text(
-            "🐾 <b>PetShare Israel</b>\n\nВыберите, с чего начнём:",
-            reply_markup=main_menu_keyboard(),
-            parse_mode="HTML",
+            t("menu_short", lang), reply_markup=main_menu_keyboard(lang), parse_mode="HTML"
         )
         return
 
     if data == "about":
         await query.edit_message_text(
-            ABOUT_TEXT, reply_markup=about_keyboard(), parse_mode="HTML"
+            t("about", lang), reply_markup=about_keyboard(lang), parse_mode="HTML"
         )
         return
 
     if data == "catalog":
-        keyboard = catalog_keyboard()
+        keyboard = catalog_keyboard(lang)
         if keyboard is None:
-            await query.edit_message_text("Каталог пока пуст, загляните позже 🐾")
+            await query.edit_message_text(t("catalog_empty", lang))
             return
-        await query.edit_message_text("Выберите категорию:", reply_markup=keyboard)
+        await query.edit_message_text(t("choose_category", lang), reply_markup=keyboard)
         return
 
     if data.startswith("card:"):
         _, category, index_str = data.split(":", 2)
         animals = sheets.get_animals_by_category(category)
         if not animals:
-            await query.edit_message_text("В этой категории пока нет животных 🐾")
+            await query.edit_message_text(t("category_empty", lang))
             return
         index = int(index_str) % len(animals)
         animal = animals[index]
         await query.edit_message_text(
-            format_card(animal, index + 1, len(animals)),
-            reply_markup=card_keyboard(category, index, len(animals), animal.get("id", "")),
+            format_card(animal, index + 1, len(animals), lang),
+            reply_markup=card_keyboard(category, index, len(animals), animal.get("id", ""), lang),
             parse_mode="HTML",
         )
         return
@@ -360,13 +368,13 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             city = str(a.get("город", "")).strip()
             if city and city not in cities:
                 cities.append(city)
-        rows = [[InlineKeyboardButton("Любой город", callback_data="f_city_set:any")]]
+        rows = [[InlineKeyboardButton(t("any_city_btn", lang), callback_data="f_city_set:any")]]
         rows += [
             [InlineKeyboardButton(f"📍 {c}", callback_data=f"f_city_set:{c}")]
             for c in sorted(cities)
         ]
         await query.edit_message_text(
-            "Выберите город:", reply_markup=InlineKeyboardMarkup(rows)
+            t("choose_city_txt", lang), reply_markup=InlineKeyboardMarkup(rows)
         )
         return
 
@@ -378,11 +386,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "f_price":
         rows = [
-            [InlineKeyboardButton(label, callback_data=f"f_price_set:{key}")]
-            for key, (label, _) in PRICE_OPTIONS.items()
+            [InlineKeyboardButton(t(f"price_{key}", lang), callback_data=f"f_price_set:{key}")]
+            for key in PRICE_CHECKS
         ]
         await query.edit_message_text(
-            "Выберите диапазон цены:", reply_markup=InlineKeyboardMarkup(rows)
+            t("choose_price_txt", lang), reply_markup=InlineKeyboardMarkup(rows)
         )
         return
 
@@ -404,7 +412,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not animals:
             text, keyboard = filter_menu(context)
             await query.edit_message_text(
-                "По этим фильтрам ничего не нашлось 🐾\n\n" + text,
+                t("flt_none", lang) + "\n\n" + text,
                 reply_markup=keyboard,
                 parse_mode="HTML",
             )
@@ -420,14 +428,14 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("▶️", callback_data=f"fcard:{(index + 1) % total}"),
             ])
         rows.append([InlineKeyboardButton(
-            "📩 Оставить заявку", callback_data=f"request:{animal.get('id', '')}"
+            t("btn_request", lang), callback_data=f"request:{animal.get('id', '')}"
         )])
         rows.append([
-            InlineKeyboardButton("🔍 Фильтры", callback_data="filters"),
-            InlineKeyboardButton("🏠 Меню", callback_data="menu"),
+            InlineKeyboardButton(t("btn_flt_back", lang), callback_data="filters"),
+            InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
         ])
         await query.edit_message_text(
-            format_card(animal, index + 1, total),
+            format_card(animal, index + 1, total, lang),
             reply_markup=InlineKeyboardMarkup(rows),
             parse_mode="HTML",
         )
@@ -439,39 +447,34 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def request_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Клиент нажал «Оставить заявку» под карточкой."""
     query = update.callback_query
+    lang = L(context)
     await query.answer()
     animal_id = query.data.split(":", 1)[1]
     animal = sheets.get_animal_by_id(animal_id)
     if not animal:
-        await query.message.reply_text("Это животное сейчас недоступно 🐾")
+        await query.message.reply_text(t("req_unavailable", lang))
         return ConversationHandler.END
     context.user_data["req_animal"] = animal
     await query.message.reply_text(
-        f"📩 Заявка на «{animal.get('имя', '')}»\n\n"
-        "На какую дату и время хотите арендовать?\n"
-        "Например: <i>12.07 в 16:00</i>\n\n"
-        "Отменить заявку — /cancel",
-        parse_mode="HTML",
+        t("req_intro", lang, name=animal.get("имя", "")), parse_mode="HTML"
     )
     return REQ_DATE
 
 
 async def request_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
     context.user_data["req_date"] = update.message.text.strip()
     keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("📱 Отправить мой номер", request_contact=True)]],
+        [[KeyboardButton(t("btn_send_phone", lang), request_contact=True)]],
         resize_keyboard=True,
         one_time_keyboard=True,
     )
-    await update.message.reply_text(
-        "Отлично! Теперь оставьте номер телефона для связи —\n"
-        "нажмите кнопку ниже или напишите номер вручную:",
-        reply_markup=keyboard,
-    )
+    await update.message.reply_text(t("req_ask_phone", lang), reply_markup=keyboard)
     return REQ_PHONE
 
 
 async def request_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
     if update.message.contact:
         phone = update.message.contact.phone_number
     else:
@@ -483,23 +486,17 @@ async def request_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client_fee = compute_client_fee(price)
     total = price + client_fee
 
-    summary = (
-        "Проверьте заявку:\n\n"
-        f"🐾 Животное: <b>{animal.get('имя', '')}</b> ({animal.get('порода', '')})\n"
-        f"📅 Дата: {context.user_data['req_date']}\n"
-        f"📱 Телефон: {phone}\n\n"
-        f"💰 Аренда: {price}₪\n"
-        f"➕ Сервисный сбор ({int(CLIENT_FEE * 100)}%): {client_fee}₪\n"
-        f"<b>Итого: {total}₪</b>\n\n"
-        "Оплата — после подтверждения владельцем."
+    summary = t(
+        "req_summary", lang,
+        name=animal.get("имя", ""), breed=animal.get("порода", ""),
+        date=context.user_data["req_date"], phone=phone,
+        price=price, fee=client_fee, total=total,
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Отправить заявку", callback_data="req_confirm")],
-        [InlineKeyboardButton("❌ Отменить", callback_data="req_cancel")],
+        [InlineKeyboardButton(t("btn_req_send", lang), callback_data="req_confirm")],
+        [InlineKeyboardButton(t("btn_req_cancel", lang), callback_data="req_cancel")],
     ])
-    await update.message.reply_text(
-        summary, reply_markup=keyboard, parse_mode="HTML",
-    )
+    await update.message.reply_text(summary, reply_markup=keyboard, parse_mode="HTML")
     # Убираем клавиатуру с кнопкой контакта
     await update.message.reply_text("👆", reply_markup=ReplyKeyboardRemove())
     return REQ_CONFIRM
@@ -507,11 +504,13 @@ async def request_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    lang = L(context)
     await query.answer()
 
     if query.data == "req_cancel":
-        await query.edit_message_text("Заявка отменена. Возвращайтесь в каталог 🐾")
-        context.user_data.clear()
+        await query.edit_message_text(t("req_cancelled", lang))
+        for key in ("req_animal", "req_date", "req_phone"):
+            context.user_data.pop(key, None)
         return ConversationHandler.END
 
     animal = context.user_data["req_animal"]
@@ -540,14 +539,9 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         platform_income,
     ])
 
-    await query.edit_message_text(
-        f"✅ Заявка <b>{req_id}</b> отправлена!\n\n"
-        "Мы свяжемся с вами для подтверждения даты.\n"
-        "Спасибо, что выбрали PetShare Israel 🐾",
-        parse_mode="HTML",
-    )
+    await query.edit_message_text(t("req_sent", lang, id=req_id), parse_mode="HTML")
 
-    # Уведомление администратору
+    # Уведомление администратору (всегда на русском)
     owner = sheets.get_owner_by_id(str(animal.get("владелец_id", "")).strip()) or {}
     admin_text = (
         f"🔔 <b>Новая заявка {req_id}</b>\n\n"
@@ -579,7 +573,17 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         logger.exception("Не удалось отправить уведомление администратору")
 
-    context.user_data.clear()
+    for key in ("req_animal", "req_date", "req_phone"):
+        context.user_data.pop(key, None)
+    return ConversationHandler.END
+
+
+async def request_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    for key in ("req_animal", "req_date", "req_phone"):
+        context.user_data.pop(key, None)
+    await update.message.reply_text(
+        t("req_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
     return ConversationHandler.END
 
 
@@ -610,10 +614,11 @@ async def admin_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML",
     )
 
-    # Сообщаем клиенту
+    # Сообщаем клиенту на его языке
     client_id = str(request.get("клиент_tg_id", "")).strip()
     if not client_id.isdigit():
         return
+    cli_lang = user_lang(context, client_id)
     animal = sheets.get_animal_by_id(str(request.get("животное_id", "")).strip()) or {}
     owner = sheets.get_owner_by_id(str(animal.get("владелец_id", "")).strip()) or {}
     try:
@@ -622,109 +627,90 @@ async def admin_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
             owner_wa = whatsapp_link(owner.get("whatsapp", ""))
             if owner_wa:
                 keyboard = InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("💬 Написать владельцу в WhatsApp", url=owner_wa)]]
+                    [[InlineKeyboardButton(t("btn_wa_owner", cli_lang), url=owner_wa)]]
                 )
             await context.bot.send_message(
                 int(client_id),
-                f"🎉 Ваша заявка <b>{req_id}</b> подтверждена!\n\n"
-                f"🐾 {request.get('животное_имя', '')}\n"
-                f"📅 {request.get('дата_аренды', '')}\n\n"
-                "Свяжитесь с владельцем, чтобы договориться о деталях:",
+                t("cli_confirmed", cli_lang, id=req_id,
+                  animal=request.get("животное_имя", ""), date=request.get("дата_аренды", "")),
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
         else:
             await context.bot.send_message(
                 int(client_id),
-                f"😔 К сожалению, заявка <b>{req_id}</b> отклонена — "
-                "выбранная дата недоступна.\n\n"
-                "Загляните в каталог: возможно, подойдёт другое животное 🐾",
+                t("cli_declined", cli_lang, id=req_id),
                 parse_mode="HTML",
             )
     except Exception:
         logger.exception("Не удалось уведомить клиента по заявке %s", req_id)
 
 
-async def request_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    await update.message.reply_text(
-        "Заявка отменена. Возвращайтесь в каталог 🐾",
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    return ConversationHandler.END
-
-
 # ---------- Анкета владельца («сдать питомца в аренду») ----------
-
-OWNER_INTRO = (
-    "💼 <b>Сдать питомца в аренду</b>\n\n"
-    "Короткая анкета (2-3 минуты) — после неё администратор проверит "
-    "данные и подключит вас к платформе.\n\n"
-    "Как вас зовут?\n\nОтменить в любой момент — /cancel"
-)
-
 
 async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data["owner_flow"] = {}
-    await query.message.reply_text(OWNER_INTRO, parse_mode="HTML")
+    await query.message.reply_text(t("own_intro", L(context)), parse_mode="HTML")
     return OWN_NAME
 
 
 async def owner_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Вход в анкету командой /owner."""
     context.user_data["owner_flow"] = {}
-    await update.message.reply_text(OWNER_INTRO, parse_mode="HTML")
+    await update.message.reply_text(t("own_intro", L(context)), parse_mode="HTML")
     return OWN_NAME
 
 
 async def owner_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["owner_flow"]["name"] = update.message.text.strip()
-    await update.message.reply_text("Ваш номер телефона (можно тот же, что в WhatsApp)?")
+    await update.message.reply_text(t("own_ask_phone", L(context)))
     return OWN_PHONE
 
 
 async def owner_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["owner_flow"]["phone"] = update.message.text.strip()
-    await update.message.reply_text("В каком городе вы находитесь?")
+    await update.message.reply_text(t("own_ask_city", L(context)))
     return OWN_CITY
 
 
 async def owner_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["owner_flow"]["city"] = update.message.text.strip()
-    await update.message.reply_text("Как зовут вашего питомца?")
+    await update.message.reply_text(t("own_ask_petname", L(context)))
     return PET_NAME
 
 
 async def pet_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
     context.user_data["owner_flow"]["pet_name"] = update.message.text.strip()
     rows = [
         [InlineKeyboardButton(f"{emoji} {cat}", callback_data=f"pc:{cat}")]
         for cat, emoji in CATEGORY_EMOJI.items()
     ]
-    rows.append([InlineKeyboardButton("➕ Другая категория", callback_data="pc:__custom__")])
+    rows.append([InlineKeyboardButton(t("own_other_cat", lang), callback_data="pc:__custom__")])
     await update.message.reply_text(
-        "Выберите категорию:", reply_markup=InlineKeyboardMarkup(rows)
+        t("own_choose_cat", lang), reply_markup=InlineKeyboardMarkup(rows)
     )
     return PET_CATEGORY
 
 
 async def pet_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    lang = L(context)
     await query.answer()
     category = query.data.split(":", 1)[1]
     if category == "__custom__":
-        await query.message.reply_text("Напишите категорию текстом:")
+        await query.message.reply_text(t("own_ask_cat_text", lang))
         return PET_CATEGORY_CUSTOM
     context.user_data["owner_flow"]["category"] = category
-    await query.message.reply_text("Вид и порода? Например: Собака, Корги")
+    await query.message.reply_text(t("own_ask_breed", lang))
     return PET_BREED
 
 
 async def pet_category_custom(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["owner_flow"]["category"] = update.message.text.strip()
-    await update.message.reply_text("Вид и порода? Например: Собака, Корги")
+    await update.message.reply_text(t("own_ask_breed", L(context)))
     return PET_BREED
 
 
@@ -732,31 +718,30 @@ async def pet_breed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = [p.strip() for p in update.message.text.split(",", 1)]
     context.user_data["owner_flow"]["species"] = parts[0]
     context.user_data["owner_flow"]["breed"] = parts[1] if len(parts) > 1 else parts[0]
-    await update.message.reply_text("Сколько лет питомцу?")
+    await update.message.reply_text(t("own_ask_age", L(context)))
     return PET_AGE
 
 
 async def pet_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["owner_flow"]["age"] = update.message.text.strip()
-    await update.message.reply_text("Опишите характер (например: дружелюбный, спокойный)")
+    await update.message.reply_text(t("own_ask_temper", L(context)))
     return PET_TEMPERAMENT
 
 
 async def pet_temperament(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["owner_flow"]["temperament"] = update.message.text.strip()
-    await update.message.reply_text(
-        "Что умеет / для чего подходит? (например: фотосессии, детские праздники)"
-    )
+    await update.message.reply_text(t("own_ask_skills", L(context)))
     return PET_SKILLS
 
 
 async def pet_skills(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
     context.user_data["owner_flow"]["skills"] = update.message.text.strip()
     keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("Да", callback_data="kids:да"),
-        InlineKeyboardButton("Нет", callback_data="kids:нет"),
+        InlineKeyboardButton(t("btn_yes", lang), callback_data="kids:да"),
+        InlineKeyboardButton(t("btn_no", lang), callback_data="kids:нет"),
     ]])
-    await update.message.reply_text("Можно ли доверить питомца детям?", reply_markup=keyboard)
+    await update.message.reply_text(t("own_ask_kids", lang), reply_markup=keyboard)
     return PET_KIDS
 
 
@@ -764,40 +749,38 @@ async def pet_kids(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data["owner_flow"]["kids"] = query.data.split(":", 1)[1]
-    await query.message.reply_text("Желаемая цена за час аренды, ₪? (только число)")
+    await query.message.reply_text(t("own_ask_price_hour", L(context)))
     return PET_PRICE_HOUR
 
 
 async def pet_price_hour(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["owner_flow"]["price_hour"] = parse_price(update.message.text)
-    await update.message.reply_text("Желаемая цена за мероприятие (несколько часов), ₪?")
+    await update.message.reply_text(t("own_ask_price_event", L(context)))
     return PET_PRICE_EVENT
 
 
 async def pet_price_event(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["owner_flow"]["price_event"] = parse_price(update.message.text)
-    await update.message.reply_text("Пришлите фото питомца, или напишите «пропустить»:")
+    await update.message.reply_text(t("own_ask_photo", L(context)))
     return PET_PHOTO
 
 
 async def pet_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
     flow = context.user_data["owner_flow"]
     flow["photo"] = update.message.photo[-1].file_id if update.message.photo else ""
 
-    summary = (
-        "Проверьте анкету:\n\n"
-        f"👤 Владелец: {flow['name']}, {flow['phone']}, {flow['city']}\n\n"
-        f"🐾 {flow['pet_name']} — {flow['species']} ({flow['breed']}), {flow['age']}\n"
-        f"📂 Категория: {flow['category']}\n"
-        f"😊 Характер: {flow['temperament']}\n"
-        f"⭐ Умеет: {flow['skills']}\n"
-        f"👶 Можно детям: {flow['kids']}\n"
-        f"💰 {flow['price_hour']}₪/час, {flow['price_event']}₪/мероприятие\n\n"
-        "Отправить на проверку администратору?"
+    summary = t(
+        "own_summary", lang,
+        name=flow["name"], phone=flow["phone"], city=flow["city"],
+        pet_name=flow["pet_name"], species=flow["species"], breed=flow["breed"],
+        age=flow["age"], category=flow["category"], temperament=flow["temperament"],
+        skills=flow["skills"], kids=flow["kids"],
+        price_hour=flow["price_hour"], price_event=flow["price_event"],
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Отправить на проверку", callback_data="pet_send")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="pet_cancel")],
+        [InlineKeyboardButton(t("btn_own_send", lang), callback_data="pet_send")],
+        [InlineKeyboardButton(t("btn_own_cancel", lang), callback_data="pet_cancel")],
     ])
     if flow["photo"]:
         await update.message.reply_photo(flow["photo"], caption=summary, reply_markup=keyboard)
@@ -808,10 +791,11 @@ async def pet_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def pet_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    lang = L(context)
     await query.answer()
 
     if query.data == "pet_cancel":
-        await query.message.reply_text("Анкета отменена.")
+        await query.message.reply_text(t("own_cancelled", lang))
         context.user_data.pop("owner_flow", None)
         return ConversationHandler.END
 
@@ -837,10 +821,9 @@ async def pet_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     sheets.append_owner_pet(owner_id, animal_id)
 
-    await query.message.reply_text(
-        "✅ Анкета отправлена на проверку! Мы свяжемся с вами после одобрения 🐾"
-    )
+    await query.message.reply_text(t("own_sent", lang))
 
+    # Уведомление администратору (всегда на русском)
     admin_text = (
         "🔔 <b>Новая анкета владельца</b>\n\n"
         f"👤 {flow['name']}, {flow['phone']}, {flow['city']} (владелец {owner_id})\n\n"
@@ -875,7 +858,9 @@ async def pet_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def owner_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("owner_flow", None)
-    await update.message.reply_text("Анкета отменена.", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text(
+        t("own_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
     return ConversationHandler.END
 
 
@@ -913,30 +898,19 @@ async def admin_owner_decision(update: Update, context: ContextTypes.DEFAULT_TYP
     owner_tg = str(owner.get("tg_id", "")).strip()
     if not owner_tg.isdigit():
         return
+    own_lang = user_lang(context, owner_tg)
     try:
         if action == "own_ok":
             sheets.update_owner_status(owner.get("id", ""), "проверен")
             await context.bot.send_message(
-                int(owner_tg),
-                f"🎉 Ваш питомец «{animal.get('имя', '')}» одобрен и уже в каталоге "
-                "PetShare Israel!",
+                int(owner_tg), t("own_approved", own_lang, name=animal.get("имя", ""))
             )
         else:
             await context.bot.send_message(
-                int(owner_tg),
-                f"😔 Анкета на «{animal.get('имя', '')}» отклонена. "
-                "Свяжитесь с нами, чтобы уточнить детали.",
+                int(owner_tg), t("own_declined", own_lang, name=animal.get("имя", ""))
             )
     except Exception:
         logger.exception("Не удалось уведомить владельца %s", owner_tg)
-
-
-async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Сброс кэша таблицы (только для администратора)."""
-    if update.effective_user.id != config.ADMIN_CHAT_ID:
-        return
-    sheets.clear_cache()
-    await update.message.reply_text("♻️ Кэш сброшен, данные перечитаются из таблицы.")
 
 
 async def on_error(update, context):
@@ -946,19 +920,27 @@ async def on_error(update, context):
 async def post_init(app):
     """Заполняет меню команд бота (кнопка «Меню» у поля ввода)."""
     await app.bot.set_my_commands([
-        ("start", "🏠 Главное меню"),
-        ("catalog", "🐾 Каталог животных"),
-        ("filters", "🔍 Подбор по фильтрам"),
-        ("owner", "💼 Сдать питомца в аренду"),
-        ("help", "ℹ️ Как это работает"),
-        ("cancel", "❌ Отменить текущее действие"),
+        ("start", "🏠 Меню / Menu / תפריט"),
+        ("catalog", "🐾 Каталог / Catalog / קטלוג"),
+        ("filters", "🔍 Фильтры / Filters / מסננים"),
+        ("owner", "💼 Сдать питомца / List your pet / להשכיר"),
+        ("language", "🌐 Язык / Language / שפה"),
+        ("help", "ℹ️ Как это работает / How it works / איך זה עובד"),
+        ("cancel", "❌ Отмена / Cancel / ביטול"),
     ])
 
 
 def main():
     if not config.BOT_TOKEN:
         raise SystemExit("Не задан PETSHARE_BOT_TOKEN в .env")
-    app = Application.builder().token(config.BOT_TOKEN).post_init(post_init).build()
+    persistence = PicklePersistence(filepath="bot_state.pkl")
+    app = (
+        Application.builder()
+        .token(config.BOT_TOKEN)
+        .persistence(persistence)
+        .post_init(post_init)
+        .build()
+    )
 
     request_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(request_start, pattern=r"^request:")],
@@ -1000,6 +982,7 @@ def main():
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("catalog", cmd_catalog))
     app.add_handler(CommandHandler("filters", cmd_filters))
+    app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(request_conv)
