@@ -52,6 +52,13 @@ CLIENT_FEE = 0.10         # 10% сервисный сбор с клиента
 # Состояния сценария заявки
 REQ_DATE, REQ_PHONE, REQ_CONFIRM = range(3)
 
+# Состояния анкеты владельца
+(
+    OWN_NAME, OWN_PHONE, OWN_CITY, PET_NAME, PET_CATEGORY, PET_CATEGORY_CUSTOM,
+    PET_BREED, PET_AGE, PET_TEMPERAMENT, PET_SKILLS, PET_KIDS,
+    PET_PRICE_HOUR, PET_PRICE_EVENT, PET_PHOTO, PET_CONFIRM,
+) = range(10, 25)
+
 
 def parse_price(value):
     try:
@@ -70,6 +77,7 @@ def main_menu_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🐾 Каталог животных", callback_data="catalog")],
         [InlineKeyboardButton("🔍 Подбор по фильтрам", callback_data="filters")],
+        [InlineKeyboardButton("💼 Сдать питомца в аренду", callback_data="owner_start")],
         [InlineKeyboardButton("ℹ️ Как это работает", callback_data="about")],
     ])
 
@@ -566,6 +574,274 @@ async def request_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+# ---------- Анкета владельца («сдать питомца в аренду») ----------
+
+async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["owner_flow"] = {}
+    await query.message.reply_text(
+        "💼 <b>Сдать питомца в аренду</b>\n\n"
+        "Короткая анкета (2-3 минуты) — после неё администратор проверит "
+        "данные и подключит вас к платформе.\n\n"
+        "Как вас зовут?\n\nОтменить в любой момент — /cancel",
+        parse_mode="HTML",
+    )
+    return OWN_NAME
+
+
+async def owner_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["name"] = update.message.text.strip()
+    await update.message.reply_text("Ваш номер телефона (можно тот же, что в WhatsApp)?")
+    return OWN_PHONE
+
+
+async def owner_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["phone"] = update.message.text.strip()
+    await update.message.reply_text("В каком городе вы находитесь?")
+    return OWN_CITY
+
+
+async def owner_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["city"] = update.message.text.strip()
+    await update.message.reply_text("Как зовут вашего питомца?")
+    return PET_NAME
+
+
+async def pet_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["pet_name"] = update.message.text.strip()
+    rows = [
+        [InlineKeyboardButton(f"{emoji} {cat}", callback_data=f"pc:{cat}")]
+        for cat, emoji in CATEGORY_EMOJI.items()
+    ]
+    rows.append([InlineKeyboardButton("➕ Другая категория", callback_data="pc:__custom__")])
+    await update.message.reply_text(
+        "Выберите категорию:", reply_markup=InlineKeyboardMarkup(rows)
+    )
+    return PET_CATEGORY
+
+
+async def pet_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    category = query.data.split(":", 1)[1]
+    if category == "__custom__":
+        await query.message.reply_text("Напишите категорию текстом:")
+        return PET_CATEGORY_CUSTOM
+    context.user_data["owner_flow"]["category"] = category
+    await query.message.reply_text("Вид и порода? Например: Собака, Корги")
+    return PET_BREED
+
+
+async def pet_category_custom(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["category"] = update.message.text.strip()
+    await update.message.reply_text("Вид и порода? Например: Собака, Корги")
+    return PET_BREED
+
+
+async def pet_breed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    parts = [p.strip() for p in update.message.text.split(",", 1)]
+    context.user_data["owner_flow"]["species"] = parts[0]
+    context.user_data["owner_flow"]["breed"] = parts[1] if len(parts) > 1 else parts[0]
+    await update.message.reply_text("Сколько лет питомцу?")
+    return PET_AGE
+
+
+async def pet_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["age"] = update.message.text.strip()
+    await update.message.reply_text("Опишите характер (например: дружелюбный, спокойный)")
+    return PET_TEMPERAMENT
+
+
+async def pet_temperament(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["temperament"] = update.message.text.strip()
+    await update.message.reply_text(
+        "Что умеет / для чего подходит? (например: фотосессии, детские праздники)"
+    )
+    return PET_SKILLS
+
+
+async def pet_skills(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["skills"] = update.message.text.strip()
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Да", callback_data="kids:да"),
+        InlineKeyboardButton("Нет", callback_data="kids:нет"),
+    ]])
+    await update.message.reply_text("Можно ли доверить питомца детям?", reply_markup=keyboard)
+    return PET_KIDS
+
+
+async def pet_kids(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["owner_flow"]["kids"] = query.data.split(":", 1)[1]
+    await query.message.reply_text("Желаемая цена за час аренды, ₪? (только число)")
+    return PET_PRICE_HOUR
+
+
+async def pet_price_hour(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["price_hour"] = parse_price(update.message.text)
+    await update.message.reply_text("Желаемая цена за мероприятие (несколько часов), ₪?")
+    return PET_PRICE_EVENT
+
+
+async def pet_price_event(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["owner_flow"]["price_event"] = parse_price(update.message.text)
+    await update.message.reply_text("Пришлите фото питомца, или напишите «пропустить»:")
+    return PET_PHOTO
+
+
+async def pet_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    flow = context.user_data["owner_flow"]
+    flow["photo"] = update.message.photo[-1].file_id if update.message.photo else ""
+
+    summary = (
+        "Проверьте анкету:\n\n"
+        f"👤 Владелец: {flow['name']}, {flow['phone']}, {flow['city']}\n\n"
+        f"🐾 {flow['pet_name']} — {flow['species']} ({flow['breed']}), {flow['age']}\n"
+        f"📂 Категория: {flow['category']}\n"
+        f"😊 Характер: {flow['temperament']}\n"
+        f"⭐ Умеет: {flow['skills']}\n"
+        f"👶 Можно детям: {flow['kids']}\n"
+        f"💰 {flow['price_hour']}₪/час, {flow['price_event']}₪/мероприятие\n\n"
+        "Отправить на проверку администратору?"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Отправить на проверку", callback_data="pet_send")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="pet_cancel")],
+    ])
+    if flow["photo"]:
+        await update.message.reply_photo(flow["photo"], caption=summary, reply_markup=keyboard)
+    else:
+        await update.message.reply_text(summary, reply_markup=keyboard)
+    return PET_CONFIRM
+
+
+async def pet_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "pet_cancel":
+        await query.message.reply_text("Анкета отменена.")
+        context.user_data.pop("owner_flow", None)
+        return ConversationHandler.END
+
+    flow = context.user_data["owner_flow"]
+    user = update.effective_user
+
+    owner = sheets.get_owner_by_tg_id(user.id)
+    if owner:
+        owner_id = owner.get("id")
+    else:
+        owner_id = sheets.next_owner_id()
+        sheets.add_owner([
+            owner_id, flow["name"], flow["phone"], user.id, flow["city"],
+            flow["phone"], "", "на проверке",
+        ])
+
+    animal_id = sheets.next_animal_id()
+    sheets.add_animal([
+        animal_id, flow["pet_name"], flow["category"], flow["species"], flow["breed"],
+        flow["age"], flow["city"], flow["price_hour"], flow["price_event"],
+        flow["temperament"], flow["skills"], flow["kids"], "не указан", "нет",
+        flow["photo"], owner_id, "на проверке", "", "нет",
+    ])
+    sheets.append_owner_pet(owner_id, animal_id)
+
+    await query.message.reply_text(
+        "✅ Анкета отправлена на проверку! Мы свяжемся с вами после одобрения 🐾"
+    )
+
+    admin_text = (
+        "🔔 <b>Новая анкета владельца</b>\n\n"
+        f"👤 {flow['name']}, {flow['phone']}, {flow['city']} (владелец {owner_id})\n\n"
+        f"🐾 {flow['pet_name']} — {flow['species']} ({flow['breed']}), {flow['age']} ({animal_id})\n"
+        f"📂 Категория: {flow['category']}\n"
+        f"😊 Характер: {flow['temperament']}\n"
+        f"⭐ Умеет: {flow['skills']}\n"
+        f"👶 Можно детям: {flow['kids']}\n"
+        f"💰 {flow['price_hour']}₪/час, {flow['price_event']}₪/мероприятие\n\n"
+        "⚠️ Проверьте документы (прививки, ветпаспорт) перед одобрением!"
+    )
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Одобрить", callback_data=f"own_ok:{animal_id}"),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f"own_no:{animal_id}"),
+    ]])
+    try:
+        if flow["photo"]:
+            await context.bot.send_photo(
+                config.ADMIN_CHAT_ID, flow["photo"], caption=admin_text,
+                parse_mode="HTML", reply_markup=keyboard,
+            )
+        else:
+            await context.bot.send_message(
+                config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML", reply_markup=keyboard,
+            )
+    except Exception:
+        logger.exception("Не удалось уведомить администратора об анкете владельца")
+
+    context.user_data.pop("owner_flow", None)
+    return ConversationHandler.END
+
+
+async def owner_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("owner_flow", None)
+    await update.message.reply_text("Анкета отменена.", reply_markup=ReplyKeyboardRemove())
+    return ConversationHandler.END
+
+
+async def admin_owner_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор одобряет/отклоняет анкету питомца."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, animal_id = query.data.split(":", 1)
+    animal = sheets.get_animal_any(animal_id)
+    if not animal:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "own_ok":
+        sheets.update_animal_status(animal_id, "да", "проверено")
+        badge = "✅ ОДОБРЕНО"
+    else:
+        sheets.update_animal_status(animal_id, "нет", "отклонено")
+        badge = "❌ ОТКЛОНЕНО"
+
+    if query.message.photo:
+        await query.edit_message_caption(
+            caption=query.message.caption_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+        )
+    else:
+        await query.edit_message_text(
+            query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+        )
+
+    owner = sheets.get_owner_by_id(str(animal.get("владелец_id", "")).strip()) or {}
+    owner_tg = str(owner.get("tg_id", "")).strip()
+    if not owner_tg.isdigit():
+        return
+    try:
+        if action == "own_ok":
+            sheets.update_owner_status(owner.get("id", ""), "проверен")
+            await context.bot.send_message(
+                int(owner_tg),
+                f"🎉 Ваш питомец «{animal.get('имя', '')}» одобрен и уже в каталоге "
+                "PetShare Israel!",
+            )
+        else:
+            await context.bot.send_message(
+                int(owner_tg),
+                f"😔 Анкета на «{animal.get('имя', '')}» отклонена. "
+                "Свяжитесь с нами, чтобы уточнить детали.",
+            )
+    except Exception:
+        logger.exception("Не удалось уведомить владельца %s", owner_tg)
+
+
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс кэша таблицы (только для администратора)."""
     if update.effective_user.id != config.ADMIN_CHAT_ID:
@@ -595,10 +871,34 @@ def main():
         fallbacks=[CommandHandler("cancel", request_cancel)],
     )
 
+    owner_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(owner_start, pattern=r"^owner_start$")],
+        states={
+            OWN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_name)],
+            OWN_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_phone)],
+            OWN_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_city)],
+            PET_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_name)],
+            PET_CATEGORY: [CallbackQueryHandler(pet_category, pattern=r"^pc:")],
+            PET_CATEGORY_CUSTOM: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_category_custom)],
+            PET_BREED: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_breed)],
+            PET_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_age)],
+            PET_TEMPERAMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_temperament)],
+            PET_SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_skills)],
+            PET_KIDS: [CallbackQueryHandler(pet_kids, pattern=r"^kids:")],
+            PET_PRICE_HOUR: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_price_hour)],
+            PET_PRICE_EVENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_price_event)],
+            PET_PHOTO: [MessageHandler(filters.PHOTO | (filters.TEXT & ~filters.COMMAND), pet_photo)],
+            PET_CONFIRM: [CallbackQueryHandler(pet_confirm, pattern=r"^pet_(send|cancel)$")],
+        },
+        fallbacks=[CommandHandler("cancel", owner_cancel)],
+    )
+
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(request_conv)
+    app.add_handler(owner_conv)
     app.add_handler(CallbackQueryHandler(admin_decision, pattern=r"^adm_(ok|no):"))
+    app.add_handler(CallbackQueryHandler(admin_owner_decision, pattern=r"^own_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_error_handler(on_error)
     logger.info("Бот PetShare Israel запущен")

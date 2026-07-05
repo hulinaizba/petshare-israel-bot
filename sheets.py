@@ -38,12 +38,34 @@ def _get_records(sheet_name):
     return records
 
 
+def _append_row(sheet_name, row):
+    ws = _get_spreadsheet().worksheet(sheet_name)
+    ws.append_row(row)
+    _cache.pop(sheet_name, None)
+
+
+def _update_fields(sheet_name, id_value, updates):
+    """Обновляет несколько колонок в строке с данным id. updates: {колонка: значение}."""
+    ws = _get_spreadsheet().worksheet(sheet_name)
+    cell = ws.find(str(id_value), in_column=1)
+    if cell is None:
+        return False
+    headers = ws.row_values(1)
+    for col_name, value in updates.items():
+        col_idx = headers.index(col_name) + 1
+        ws.update_cell(cell.row, col_idx, value)
+    _cache.pop(sheet_name, None)
+    return True
+
+
 def clear_cache():
     _cache.clear()
 
 
+# ---------- Животные ----------
+
 def get_animals():
-    """Все активные животные из каталога."""
+    """Все активные (одобренные) животные из каталога."""
     animals = _get_records(config.SHEET_ANIMALS)
     return [a for a in animals if str(a.get("активна", "")).strip().lower() == "да"]
 
@@ -63,11 +85,40 @@ def get_animals_by_category(category):
 
 
 def get_animal_by_id(animal_id):
+    """Ищет только среди активных (одобренных) животных."""
     for a in get_animals():
         if str(a.get("id", "")).strip() == animal_id:
             return a
     return None
 
+
+def get_animal_any(animal_id):
+    """Ищет животное независимо от статуса — нужно для модерации анкет."""
+    for a in _get_records(config.SHEET_ANIMALS):
+        if str(a.get("id", "")).strip() == animal_id:
+            return a
+    return None
+
+
+def next_animal_id():
+    records = _get_records(config.SHEET_ANIMALS)
+    return f"AN-{len(records) + 1:03d}"
+
+
+def add_animal(row):
+    """Добавляет животное в лист 'Животные'. row — список значений по колонкам."""
+    _append_row(config.SHEET_ANIMALS, row)
+
+
+def update_animal_status(animal_id, active, verified_status):
+    """Меняет 'активна' и 'статус_проверки' по итогам модерации анкеты."""
+    return _update_fields(config.SHEET_ANIMALS, animal_id, {
+        "активна": active,
+        "статус_проверки": verified_status,
+    })
+
+
+# ---------- Владельцы ----------
 
 def get_owner_by_id(owner_id):
     for o in _get_records(config.SHEET_OWNERS):
@@ -76,11 +127,40 @@ def get_owner_by_id(owner_id):
     return None
 
 
+def get_owner_by_tg_id(tg_id):
+    for o in _get_records(config.SHEET_OWNERS):
+        if str(o.get("tg_id", "")).strip() == str(tg_id):
+            return o
+    return None
+
+
+def next_owner_id():
+    records = _get_records(config.SHEET_OWNERS)
+    return f"OWN-{len(records) + 1:03d}"
+
+
+def add_owner(row):
+    """Добавляет владельца в лист 'Владельцы'. row — список значений по колонкам."""
+    _append_row(config.SHEET_OWNERS, row)
+
+
+def update_owner_status(owner_id, status):
+    return _update_fields(config.SHEET_OWNERS, owner_id, {"статус": status})
+
+
+def append_owner_pet(owner_id, animal_id):
+    """Дописывает id животного в колонку 'животные' владельца."""
+    owner = get_owner_by_id(owner_id) or {}
+    current = str(owner.get("животные", "")).strip()
+    new_value = f"{current}, {animal_id}" if current else animal_id
+    _update_fields(config.SHEET_OWNERS, owner_id, {"животные": new_value})
+
+
+# ---------- Заявки ----------
+
 def add_request(row):
     """Добавляет заявку в лист 'Заявки'. row — список значений по колонкам."""
-    ws = _get_spreadsheet().worksheet(config.SHEET_REQUESTS)
-    ws.append_row(row)
-    _cache.pop(config.SHEET_REQUESTS, None)
+    _append_row(config.SHEET_REQUESTS, row)
 
 
 def next_request_id():
@@ -99,12 +179,4 @@ def get_request(req_id):
 
 def update_request_status(req_id, status):
     """Меняет статус заявки в листе 'Заявки'. Возвращает True при успехе."""
-    ws = _get_spreadsheet().worksheet(config.SHEET_REQUESTS)
-    cell = ws.find(req_id, in_column=1)
-    if cell is None:
-        return False
-    headers = ws.row_values(1)
-    status_col = headers.index("статус") + 1
-    ws.update_cell(cell.row, status_col, status)
-    _cache.pop(config.SHEET_REQUESTS, None)
-    return True
+    return _update_fields(config.SHEET_REQUESTS, req_id, {"статус": status})
