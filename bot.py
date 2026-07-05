@@ -69,8 +69,68 @@ def whatsapp_link(phone):
 def main_menu_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🐾 Каталог животных", callback_data="catalog")],
+        [InlineKeyboardButton("🔍 Подбор по фильтрам", callback_data="filters")],
         [InlineKeyboardButton("ℹ️ Как это работает", callback_data="about")],
     ])
+
+
+# ---------- Фильтры ----------
+
+PRICE_OPTIONS = {
+    "any": ("любая", None),
+    "low": ("до 100₪/час", lambda p: p <= 100),
+    "high": ("от 100₪/час", lambda p: p > 100),
+}
+
+
+def get_filters(context):
+    """Текущие фильтры пользователя (по умолчанию — всё)."""
+    return {
+        "city": context.user_data.get("filt_city", "any"),
+        "price": context.user_data.get("filt_price", "any"),
+        "kids": context.user_data.get("filt_kids", "any"),
+    }
+
+
+def apply_filters(animals, filt):
+    result = []
+    for a in animals:
+        if filt["city"] != "any" and str(a.get("город", "")).strip() != filt["city"]:
+            continue
+        price_check = PRICE_OPTIONS[filt["price"]][1]
+        if price_check and not price_check(parse_price(a.get("цена_час"))):
+            continue
+        if filt["kids"] == "да" and str(a.get("можно_детям", "")).strip().lower() != "да":
+            continue
+        result.append(a)
+    return result
+
+
+def filter_menu(context):
+    """Текст и клавиатура экрана фильтров."""
+    filt = get_filters(context)
+    city_label = "любой" if filt["city"] == "any" else filt["city"]
+    price_label = PRICE_OPTIONS[filt["price"]][0]
+    kids_label = "не важно" if filt["kids"] == "any" else "только да"
+    count = len(apply_filters(sheets.get_animals(), filt))
+    text = (
+        "🔍 <b>Подбор по фильтрам</b>\n\n"
+        f"📍 Город: <b>{city_label}</b>\n"
+        f"💰 Цена: <b>{price_label}</b>\n"
+        f"👶 Можно детям: <b>{kids_label}</b>\n\n"
+        f"Найдено животных: <b>{count}</b>"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📍 Выбрать город", callback_data="f_city")],
+        [InlineKeyboardButton("💰 Выбрать цену", callback_data="f_price")],
+        [InlineKeyboardButton("👶 Можно детям: да/не важно", callback_data="f_kids")],
+        [InlineKeyboardButton(f"✅ Показать ({count})", callback_data="fcard:0")],
+        [
+            InlineKeyboardButton("♻️ Сбросить", callback_data="f_reset"),
+            InlineKeyboardButton("🏠 Меню", callback_data="menu"),
+        ],
+    ])
+    return text, keyboard
 
 
 def format_card(animal, position, total):
@@ -192,6 +252,95 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             format_card(animal, index + 1, len(animals)),
             reply_markup=card_keyboard(category, index, len(animals), animal.get("id", "")),
+            parse_mode="HTML",
+        )
+        return
+
+    # --- Экраны фильтров ---
+
+    if data == "filters" or data == "f_reset":
+        if data == "f_reset":
+            for key in ("filt_city", "filt_price", "filt_kids"):
+                context.user_data.pop(key, None)
+        text, keyboard = filter_menu(context)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        return
+
+    if data == "f_city":
+        cities = []
+        for a in sheets.get_animals():
+            city = str(a.get("город", "")).strip()
+            if city and city not in cities:
+                cities.append(city)
+        rows = [[InlineKeyboardButton("Любой город", callback_data="f_city_set:any")]]
+        rows += [
+            [InlineKeyboardButton(f"📍 {c}", callback_data=f"f_city_set:{c}")]
+            for c in sorted(cities)
+        ]
+        await query.edit_message_text(
+            "Выберите город:", reply_markup=InlineKeyboardMarkup(rows)
+        )
+        return
+
+    if data.startswith("f_city_set:"):
+        context.user_data["filt_city"] = data.split(":", 1)[1]
+        text, keyboard = filter_menu(context)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        return
+
+    if data == "f_price":
+        rows = [
+            [InlineKeyboardButton(label, callback_data=f"f_price_set:{key}")]
+            for key, (label, _) in PRICE_OPTIONS.items()
+        ]
+        await query.edit_message_text(
+            "Выберите диапазон цены:", reply_markup=InlineKeyboardMarkup(rows)
+        )
+        return
+
+    if data.startswith("f_price_set:"):
+        context.user_data["filt_price"] = data.split(":", 1)[1]
+        text, keyboard = filter_menu(context)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        return
+
+    if data == "f_kids":
+        current = context.user_data.get("filt_kids", "any")
+        context.user_data["filt_kids"] = "да" if current == "any" else "any"
+        text, keyboard = filter_menu(context)
+        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        return
+
+    if data.startswith("fcard:"):
+        animals = apply_filters(sheets.get_animals(), get_filters(context))
+        if not animals:
+            text, keyboard = filter_menu(context)
+            await query.edit_message_text(
+                "По этим фильтрам ничего не нашлось 🐾\n\n" + text,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+            return
+        index = int(data.split(":", 1)[1]) % len(animals)
+        animal = animals[index]
+        total = len(animals)
+        rows = []
+        if total > 1:
+            rows.append([
+                InlineKeyboardButton("◀️", callback_data=f"fcard:{(index - 1) % total}"),
+                InlineKeyboardButton(f"{index + 1}/{total}", callback_data="noop"),
+                InlineKeyboardButton("▶️", callback_data=f"fcard:{(index + 1) % total}"),
+            ])
+        rows.append([InlineKeyboardButton(
+            "📩 Оставить заявку", callback_data=f"request:{animal.get('id', '')}"
+        )])
+        rows.append([
+            InlineKeyboardButton("🔍 Фильтры", callback_data="filters"),
+            InlineKeyboardButton("🏠 Меню", callback_data="menu"),
+        ])
+        await query.edit_message_text(
+            format_card(animal, index + 1, total),
+            reply_markup=InlineKeyboardMarkup(rows),
             parse_mode="HTML",
         )
         return
