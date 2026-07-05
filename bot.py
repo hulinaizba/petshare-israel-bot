@@ -192,17 +192,20 @@ def card_keyboard(category, index, total, animal_id):
 
 WELCOME_TEXT = (
     "🐾 <b>PetShare Israel</b>\n"
-    "<i>Животные, которые делают события незабываемыми</i>\n"
+    "<i>Время с животными — без забот владения</i>\n"
     "━━━━━━━━━━━━━━━━━━\n\n"
-    "📸 Фотосессия с альпакой? Корги на дне рождения?\n"
-    "Хаски для рекламной съёмки? — всё здесь!\n\n"
+    "🚶 Погулять с собакой, о которой давно мечтаете?\n"
+    "🐴 Покататься на лошади на закате?\n"
+    "🤔 Понять, ваша ли это порода, до покупки щенка?\n"
+    "📸 Фотосессия с альпакой или праздник с корги?\n\n"
+    "Всё это — здесь, за пару кликов!\n\n"
     "✨ <b>Для вас:</b>\n"
     "🔹 Проверенные животные с документами\n"
-    "🔹 Сопровождение владельца и инструкции\n"
+    "🔹 Владелец рядом, инструкции и поддержка\n"
     "🔹 Заявка за 2 минуты прямо в боте\n\n"
     "💼 <b>Для владельцев питомцев:</b>\n"
-    "Ваш любимец может «работать» и приносить доход в дом —\n"
-    "от 45₪/час за фотосессии и праздники. Анкета — 3 минуты!\n"
+    "Ваш любимец может «работать» и приносить доход в дом.\n"
+    "Цену назначаете вы. Анкета — 3 минуты!\n"
     "━━━━━━━━━━━━━━━━━━"
 )
 
@@ -211,22 +214,32 @@ ABOUT_TEXT = (
     "ℹ️ <b>Как это работает</b>\n"
     "━━━━━━━━━━━━━━━━━━\n\n"
     "💼 <b>Ваш питомец может работать!</b>\n\n"
-    "Да-да, домашние животные тоже приносят зарплату в дом 😄\n"
-    "Фотографы, организаторы праздников и бренды постоянно ищут\n"
-    "обаятельных моделей: собак, кошек, попугаев, кроликов, альпак...\n\n"
-    "Сколько можно заработать:\n"
-    "🔹 Фотосессия (1-2 часа) — от 45 до 250₪\n"
-    "🔹 Детский праздник — от 180₪\n"
-    "🔹 Свадьба или брендовая съёмка — от 400₪\n\n"
+    "Да-да, домашние животные тоже могут приносить доход в дом 😄\n"
+    "Людям нужны не только съёмки — им нужны эмоции и общение\n"
+    "с животными, которых у них нет:\n\n"
+    "🚶 <b>Прогулки</b> — с вашей собакой погуляет тот,\n"
+    "кто мечтает о такой же, но не может завести\n"
+    "🤔 <b>«Тест-драйв породы»</b> — человек сомневается,\n"
+    "заводить ли щенка. Знакомится с вашим питомцем —\n"
+    "и принимает взвешенное решение\n"
+    "🐴 <b>Конные прогулки</b> — катание и фото с лошадьми\n"
+    "📸 <b>События</b> — фотосессии, детские праздники,\n"
+    "свадьбы, реклама\n\n"
+    "Цену назначаете вы сами — за час или за событие.\n\n"
     "Как начать:\n"
     "1️⃣ Заполняете анкету в боте — 3 минуты\n"
     "2️⃣ Мы проверяем данные и документы (прививки, ветпаспорт)\n"
     "3️⃣ Питомец появляется в каталоге\n"
     "4️⃣ Получаете заявки и зарабатываете 💰\n\n"
-    "Вы всегда рядом с питомцем на съёмке, все условия — по договору,\n"
+    "Вы всегда рядом со своим питомцем, все условия — по договору,\n"
     f"комиссия платформы {int(OWNER_COMMISSION * 100)}% только с состоявшихся аренд.\n\n"
     "━━━━━━━━━━━━━━━━━━\n\n"
-    "🐾 <b>Хотите арендовать животное?</b>\n\n"
+    "🐾 <b>Хотите провести время с животным?</b>\n\n"
+    "Не только «для дела» — можно просто для души:\n"
+    "🔹 погулять с собакой, о которой мечтаете\n"
+    "🔹 покататься на лошади\n"
+    "🔹 «примерить» породу перед покупкой щенка\n"
+    "🔹 устроить праздник, фотосессию или сюрприз близким\n\n"
     "1️⃣ Выбираете в каталоге или через фильтры\n"
     "2️⃣ Оставляете заявку прямо в боте\n"
     "3️⃣ Владелец подтверждает дату и время\n"
@@ -237,9 +250,52 @@ ABOUT_TEXT = (
 )
 
 
+def catalog_keyboard():
+    """Клавиатура выбора категории; None — если каталог пуст."""
+    categories = sheets.get_categories()
+    if not categories:
+        return None
+    rows = [
+        [InlineKeyboardButton(
+            f"{CATEGORY_EMOJI.get(cat, '🐾')} {cat}",
+            callback_data=f"card:{cat}:0",
+        )]
+        for cat in categories
+    ]
+    rows.append([InlineKeyboardButton("🏠 Меню", callback_data="menu")])
+    return InlineKeyboardMarkup(rows)
+
+
+def about_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("💼 Заполнить анкету питомца", callback_data="owner_start")],
+        [InlineKeyboardButton("🐾 Открыть каталог", callback_data="catalog")],
+        [InlineKeyboardButton("🏠 Меню", callback_data="menu")],
+    ])
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         WELCOME_TEXT, reply_markup=main_menu_keyboard(), parse_mode="HTML"
+    )
+
+
+async def cmd_catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = catalog_keyboard()
+    if keyboard is None:
+        await update.message.reply_text("Каталог пока пуст, загляните позже 🐾")
+        return
+    await update.message.reply_text("Выберите категорию:", reply_markup=keyboard)
+
+
+async def cmd_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text, keyboard = filter_menu(context)
+    await update.message.reply_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        ABOUT_TEXT, reply_markup=about_keyboard(), parse_mode="HTML"
     )
 
 
@@ -260,30 +316,17 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "about":
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💼 Заполнить анкету питомца", callback_data="owner_start")],
-            [InlineKeyboardButton("🐾 Открыть каталог", callback_data="catalog")],
-            [InlineKeyboardButton("🏠 Меню", callback_data="menu")],
-        ])
-        await query.edit_message_text(ABOUT_TEXT, reply_markup=keyboard, parse_mode="HTML")
+        await query.edit_message_text(
+            ABOUT_TEXT, reply_markup=about_keyboard(), parse_mode="HTML"
+        )
         return
 
     if data == "catalog":
-        categories = sheets.get_categories()
-        if not categories:
+        keyboard = catalog_keyboard()
+        if keyboard is None:
             await query.edit_message_text("Каталог пока пуст, загляните позже 🐾")
             return
-        rows = [
-            [InlineKeyboardButton(
-                f"{CATEGORY_EMOJI.get(cat, '🐾')} {cat}",
-                callback_data=f"card:{cat}:0",
-            )]
-            for cat in categories
-        ]
-        rows.append([InlineKeyboardButton("🏠 Меню", callback_data="menu")])
-        await query.edit_message_text(
-            "Выберите категорию:", reply_markup=InlineKeyboardMarkup(rows)
-        )
+        await query.edit_message_text("Выберите категорию:", reply_markup=keyboard)
         return
 
     if data.startswith("card:"):
@@ -613,17 +656,26 @@ async def request_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------- Анкета владельца («сдать питомца в аренду») ----------
 
+OWNER_INTRO = (
+    "💼 <b>Сдать питомца в аренду</b>\n\n"
+    "Короткая анкета (2-3 минуты) — после неё администратор проверит "
+    "данные и подключит вас к платформе.\n\n"
+    "Как вас зовут?\n\nОтменить в любой момент — /cancel"
+)
+
+
 async def owner_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data["owner_flow"] = {}
-    await query.message.reply_text(
-        "💼 <b>Сдать питомца в аренду</b>\n\n"
-        "Короткая анкета (2-3 минуты) — после неё администратор проверит "
-        "данные и подключит вас к платформе.\n\n"
-        "Как вас зовут?\n\nОтменить в любой момент — /cancel",
-        parse_mode="HTML",
-    )
+    await query.message.reply_text(OWNER_INTRO, parse_mode="HTML")
+    return OWN_NAME
+
+
+async def owner_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вход в анкету командой /owner."""
+    context.user_data["owner_flow"] = {}
+    await update.message.reply_text(OWNER_INTRO, parse_mode="HTML")
     return OWN_NAME
 
 
@@ -891,10 +943,22 @@ async def on_error(update, context):
     logger.exception("Ошибка при обработке апдейта", exc_info=context.error)
 
 
+async def post_init(app):
+    """Заполняет меню команд бота (кнопка «Меню» у поля ввода)."""
+    await app.bot.set_my_commands([
+        ("start", "🏠 Главное меню"),
+        ("catalog", "🐾 Каталог животных"),
+        ("filters", "🔍 Подбор по фильтрам"),
+        ("owner", "💼 Сдать питомца в аренду"),
+        ("help", "ℹ️ Как это работает"),
+        ("cancel", "❌ Отменить текущее действие"),
+    ])
+
+
 def main():
     if not config.BOT_TOKEN:
         raise SystemExit("Не задан PETSHARE_BOT_TOKEN в .env")
-    app = Application.builder().token(config.BOT_TOKEN).build()
+    app = Application.builder().token(config.BOT_TOKEN).post_init(post_init).build()
 
     request_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(request_start, pattern=r"^request:")],
@@ -909,7 +973,10 @@ def main():
     )
 
     owner_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(owner_start, pattern=r"^owner_start$")],
+        entry_points=[
+            CallbackQueryHandler(owner_start, pattern=r"^owner_start$"),
+            CommandHandler("owner", owner_start_cmd),
+        ],
         states={
             OWN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_name)],
             OWN_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_phone)],
@@ -931,6 +998,9 @@ def main():
     )
 
     app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("catalog", cmd_catalog))
+    app.add_handler(CommandHandler("filters", cmd_filters))
+    app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(request_conv)
     app.add_handler(owner_conv)

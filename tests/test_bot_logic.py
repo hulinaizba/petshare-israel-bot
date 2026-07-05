@@ -147,7 +147,16 @@ def test_welcome_mentions_owners():
 
 def test_about_owner_section_first():
     assert "питомец может работать" in bot.ABOUT_TEXT
-    # блок владельца идёт раньше блока аренды
-    assert bot.ABOUT_TEXT.index("питомец может работать") < bot.ABOUT_TEXT.index("арендовать животное")
+    # блок владельца идёт раньше блока для клиентов
+    assert bot.ABOUT_TEXT.index("питомец может работать") < bot.ABOUT_TEXT.index("провести время с животным")
     assert "20%" in bot.ABOUT_TEXT
     assert "10%" in bot.ABOUT_TEXT
+
+
+def test_about_mentions_scenarios():
+    assert "Тест-драйв породы" in bot.ABOUT_TEXT
+    assert "Прогулки" in bot.ABOUT_TEXT
+    assert "Конные прогулки" in bot.ABOUT_TEXT
+    # конкретных сумм заработка в тексте нет — цену назначает владелец
+    assert "от 45" not in bot.ABOUT_TEXT
+    assert "Цену назначаете вы" in bot.ABOUT_TEXT
