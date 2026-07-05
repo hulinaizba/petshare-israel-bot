@@ -62,6 +62,15 @@ REQ_DATE, REQ_PHONE, REQ_CONFIRM = range(3)
     PET_PRICE_HOUR, PET_PRICE_EVENT, PET_PHOTO, PET_CONFIRM,
 ) = range(10, 25)
 
+# Состояния анкеты пет-ситтера
+(
+    SIT_NAME, SIT_PHONE, SIT_CITY, SIT_ANIMALS, SIT_EXP,
+    SIT_COND, SIT_PRICE, SIT_CONFIRM,
+) = range(30, 38)
+
+# Состояния заявки на передержку
+BRD_PET, BRD_DATES, BRD_CITY, BRD_NOTES, BRD_PHONE, BRD_CONFIRM = range(40, 46)
+
 
 def L(context):
     """Язык текущего пользователя."""
@@ -106,8 +115,31 @@ def main_menu_keyboard(lang):
         [InlineKeyboardButton(t("btn_catalog", lang), callback_data="catalog")],
         [InlineKeyboardButton(t("btn_filters", lang), callback_data="filters")],
         [InlineKeyboardButton(t("btn_owner", lang), callback_data="owner_start")],
+        [InlineKeyboardButton(t("btn_boarding", lang), callback_data="board_menu")],
         [InlineKeyboardButton(t("btn_about", lang), callback_data="about")],
         [InlineKeyboardButton(t("btn_lang", lang), callback_data="lang")],
+    ])
+
+
+def board_menu_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_give_pet", lang), callback_data="brdreq:")],
+        [InlineKeyboardButton(t("btn_be_sitter", lang), callback_data="sitter_form")],
+        [InlineKeyboardButton(t("btn_sitters_list", lang), callback_data="sitcard:0")],
+        [InlineKeyboardButton(t("btn_menu", lang), callback_data="menu")],
+    ])
+
+
+def format_sitter_card(sitter, position, total, lang):
+    return "\n".join([
+        f"🤝 <b>{sitter.get('имя', '')}</b> — 📍 {sitter.get('город', '')}",
+        "",
+        f"🐾 {t('sit_card_takes', lang)}: {sitter.get('животные', '')}",
+        f"⭐ {t('sit_card_exp', lang)}: {sitter.get('опыт', '')}",
+        f"🏠 {t('sit_card_cond', lang)}: {sitter.get('условия', '')}",
+        f"💰 {sitter.get('цена_сутки', '')}₪/{t('sit_card_day', lang)}",
+        "",
+        t("card_pos", lang, pos=position, total=total),
     ])
 
 
@@ -283,6 +315,13 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    await update.message.reply_text(
+        t("board_menu", lang), reply_markup=board_menu_keyboard(lang), parse_mode="HTML"
+    )
+
+
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс кэша таблицы (только для администратора)."""
     if update.effective_user.id != config.ADMIN_CHAT_ID:
@@ -328,6 +367,43 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "about":
         await query.edit_message_text(
             t("about", lang), reply_markup=about_keyboard(lang), parse_mode="HTML"
+        )
+        return
+
+    if data == "board_menu":
+        await query.edit_message_text(
+            t("board_menu", lang), reply_markup=board_menu_keyboard(lang), parse_mode="HTML"
+        )
+        return
+
+    if data.startswith("sitcard:"):
+        sitters = sheets.get_sitters()
+        if not sitters:
+            await query.edit_message_text(
+                t("sitters_empty", lang), reply_markup=board_menu_keyboard(lang)
+            )
+            return
+        index = int(data.split(":", 1)[1]) % len(sitters)
+        sitter = sitters[index]
+        total = len(sitters)
+        rows = []
+        if total > 1:
+            rows.append([
+                InlineKeyboardButton("◀️", callback_data=f"sitcard:{(index - 1) % total}"),
+                InlineKeyboardButton(f"{index + 1}/{total}", callback_data="noop"),
+                InlineKeyboardButton("▶️", callback_data=f"sitcard:{(index + 1) % total}"),
+            ])
+        rows.append([InlineKeyboardButton(
+            t("btn_request_sitter", lang), callback_data=f"brdreq:{sitter.get('id', '')}"
+        )])
+        rows.append([
+            InlineKeyboardButton(t("btn_boarding", lang), callback_data="board_menu"),
+            InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
+        ])
+        await query.edit_message_text(
+            format_sitter_card(sitter, index + 1, total, lang),
+            reply_markup=InlineKeyboardMarkup(rows),
+            parse_mode="HTML",
         )
         return
 
@@ -915,6 +991,355 @@ async def admin_owner_decision(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.exception("Не удалось уведомить владельца %s", owner_tg)
 
 
+# ---------- Анкета пет-ситтера ----------
+
+async def sitter_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["sit_flow"] = {}
+    await query.message.reply_text(t("sit_intro", L(context)), parse_mode="HTML")
+    return SIT_NAME
+
+
+async def sitter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["sit_flow"]["name"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_phone", L(context)))
+    return SIT_PHONE
+
+
+async def sitter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["sit_flow"]["phone"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_city", L(context)))
+    return SIT_CITY
+
+
+async def sitter_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["sit_flow"]["city"] = update.message.text.strip()
+    await update.message.reply_text(t("sit_ask_animals", L(context)))
+    return SIT_ANIMALS
+
+
+async def sitter_animals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["sit_flow"]["animals"] = update.message.text.strip()
+    await update.message.reply_text(t("sit_ask_exp", L(context)))
+    return SIT_EXP
+
+
+async def sitter_exp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["sit_flow"]["exp"] = update.message.text.strip()
+    await update.message.reply_text(t("sit_ask_cond", L(context)))
+    return SIT_COND
+
+
+async def sitter_cond(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["sit_flow"]["cond"] = update.message.text.strip()
+    await update.message.reply_text(t("sit_ask_price", L(context)))
+    return SIT_PRICE
+
+
+async def sitter_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    flow = context.user_data["sit_flow"]
+    flow["price"] = parse_price(update.message.text)
+    summary = t(
+        "sit_summary", lang,
+        name=flow["name"], phone=flow["phone"], city=flow["city"],
+        animals=flow["animals"], exp=flow["exp"], cond=flow["cond"], price=flow["price"],
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_own_send", lang), callback_data="sit_send")],
+        [InlineKeyboardButton(t("btn_own_cancel", lang), callback_data="sit_cancel")],
+    ])
+    await update.message.reply_text(summary, reply_markup=keyboard)
+    return SIT_CONFIRM
+
+
+async def sitter_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+
+    if query.data == "sit_cancel":
+        await query.message.reply_text(t("own_cancelled", lang))
+        context.user_data.pop("sit_flow", None)
+        return ConversationHandler.END
+
+    flow = context.user_data["sit_flow"]
+    user = update.effective_user
+    sitter_id = sheets.next_sitter_id()
+    sheets.add_sitter([
+        sitter_id, flow["name"], flow["phone"], user.id, flow["city"],
+        flow["animals"], flow["exp"], flow["cond"], flow["price"],
+        "на проверке", datetime.now().strftime("%d.%m.%Y %H:%M"),
+    ])
+    await query.message.reply_text(t("own_sent", lang))
+
+    admin_text = (
+        "🔔 <b>Новая анкета пет-ситтера</b>\n\n"
+        f"👤 {flow['name']}, {flow['phone']}, {flow['city']} ({sitter_id})\n"
+        f"🐾 Берёт: {flow['animals']}\n"
+        f"⭐ Опыт: {flow['exp']}\n"
+        f"🏠 Условия: {flow['cond']}\n"
+        f"💰 {flow['price']}₪/сутки\n\n"
+        "⚠️ Созвонитесь и проверьте условия перед одобрением!"
+    )
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Одобрить", callback_data=f"sit_ok:{sitter_id}"),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f"sit_no:{sitter_id}"),
+    ]])
+    try:
+        await context.bot.send_message(
+            config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML", reply_markup=keyboard
+        )
+    except Exception:
+        logger.exception("Не удалось уведомить администратора об анкете ситтера")
+
+    context.user_data.pop("sit_flow", None)
+    return ConversationHandler.END
+
+
+async def sitter_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("sit_flow", None)
+    await update.message.reply_text(
+        t("own_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
+async def admin_sitter_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор одобряет/отклоняет анкету ситтера."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, sitter_id = query.data.split(":", 1)
+    sitter = sheets.get_sitter_any(sitter_id)
+    if not sitter:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "sit_ok":
+        sheets.update_sitter_status(sitter_id, "проверен")
+        badge = "✅ ОДОБРЕНО"
+    else:
+        sheets.update_sitter_status(sitter_id, "отклонён")
+        badge = "❌ ОТКЛОНЕНО"
+    await query.edit_message_text(
+        query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+    )
+
+    sitter_tg = str(sitter.get("tg_id", "")).strip()
+    if not sitter_tg.isdigit():
+        return
+    sit_lang = user_lang(context, sitter_tg)
+    try:
+        key = "sit_approved" if action == "sit_ok" else "sit_declined"
+        await context.bot.send_message(int(sitter_tg), t(key, sit_lang))
+    except Exception:
+        logger.exception("Не удалось уведомить ситтера %s", sitter_tg)
+
+
+# ---------- Заявка на передержку ----------
+
+async def boarding_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    sitter_id = query.data.split(":", 1)[1]
+    context.user_data["brd_flow"] = {"sitter_id": sitter_id}
+    if sitter_id:
+        sitter = sheets.get_sitter_any(sitter_id) or {}
+        context.user_data["brd_flow"]["sitter_name"] = sitter.get("имя", "")
+        text = t("brd_intro_sitter", lang, name=sitter.get("имя", ""))
+    else:
+        text = t("brd_intro", lang)
+    await query.message.reply_text(text, parse_mode="HTML")
+    return BRD_PET
+
+
+async def boarding_pet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["brd_flow"]["pet"] = update.message.text.strip()
+    await update.message.reply_text(t("brd_ask_dates", L(context)), parse_mode="HTML")
+    return BRD_DATES
+
+
+async def boarding_dates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["brd_flow"]["dates"] = update.message.text.strip()
+    await update.message.reply_text(t("brd_ask_city", L(context)))
+    return BRD_CITY
+
+
+async def boarding_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["brd_flow"]["city"] = update.message.text.strip()
+    await update.message.reply_text(t("brd_ask_notes", L(context)))
+    return BRD_NOTES
+
+
+async def boarding_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    context.user_data["brd_flow"]["notes"] = update.message.text.strip()
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton(t("btn_send_phone", lang), request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+    await update.message.reply_text(t("req_ask_phone", lang), reply_markup=keyboard)
+    return BRD_PHONE
+
+
+async def boarding_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    flow = context.user_data["brd_flow"]
+    if update.message.contact:
+        flow["phone"] = update.message.contact.phone_number
+    else:
+        flow["phone"] = update.message.text.strip()
+
+    sitter_line = ""
+    if flow.get("sitter_name"):
+        sitter_line = t("brd_sitter_line", lang, name=flow["sitter_name"])
+    summary = t(
+        "brd_summary", lang,
+        pet=flow["pet"], dates=flow["dates"], city=flow["city"],
+        notes=flow["notes"], phone=flow["phone"], sitter_line=sitter_line,
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_req_send", lang), callback_data="brd_confirm")],
+        [InlineKeyboardButton(t("btn_req_cancel", lang), callback_data="brd_cancel")],
+    ])
+    await update.message.reply_text(summary, reply_markup=keyboard)
+    await update.message.reply_text("👆", reply_markup=ReplyKeyboardRemove())
+    return BRD_CONFIRM
+
+
+async def boarding_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+
+    if query.data == "brd_cancel":
+        await query.edit_message_text(t("req_cancelled", lang))
+        context.user_data.pop("brd_flow", None)
+        return ConversationHandler.END
+
+    flow = context.user_data["brd_flow"]
+    user = update.effective_user
+    brd_id = sheets.next_boarding_id()
+    client_name = user.full_name + (f" (@{user.username})" if user.username else "")
+    sheets.add_boarding([
+        brd_id,
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        client_name,
+        flow["phone"],
+        user.id,
+        flow["pet"],
+        flow["dates"],
+        flow["notes"],
+        flow["city"],
+        flow.get("sitter_id", ""),
+        "новая",
+        "",
+    ])
+    await query.edit_message_text(t("brd_sent", lang, id=brd_id), parse_mode="HTML")
+
+    sitter = sheets.get_sitter_any(flow.get("sitter_id", "")) or {}
+    sitter_info = (
+        f"🤝 Ситтер: {sitter.get('имя', '')}, {sitter.get('телефон', '')} "
+        f"({sitter.get('цена_сутки', '')}₪/сутки)\n"
+        if sitter else "🤝 Ситтер не выбран — подберите вручную\n"
+    )
+    admin_text = (
+        f"🔔 <b>Новая заявка на передержку {brd_id}</b>\n\n"
+        f"👤 Владелец: {client_name}\n"
+        f"📱 Телефон: {flow['phone']}\n"
+        f"🐾 Питомец: {flow['pet']}\n"
+        f"📅 Даты: {flow['dates']}\n"
+        f"📍 Город: {flow['city']}\n"
+        f"📝 Особенности: {flow['notes']}\n"
+        + sitter_info
+    )
+    admin_rows = [[
+        InlineKeyboardButton("✅ Подтвердить", callback_data=f"brd_ok:{brd_id}"),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f"brd_no:{brd_id}"),
+    ]]
+    sitter_wa = whatsapp_link(sitter.get("телефон", ""))
+    if sitter_wa:
+        admin_rows.append([InlineKeyboardButton("💬 WhatsApp ситтера", url=sitter_wa)])
+    try:
+        await context.bot.send_message(
+            config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(admin_rows),
+        )
+    except Exception:
+        logger.exception("Не удалось уведомить администратора о передержке")
+
+    context.user_data.pop("brd_flow", None)
+    return ConversationHandler.END
+
+
+async def boarding_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("brd_flow", None)
+    await update.message.reply_text(
+        t("req_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
+async def admin_boarding_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор подтверждает/отклоняет заявку на передержку."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, brd_id = query.data.split(":", 1)
+    request = sheets.get_boarding(brd_id)
+    if not request:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "brd_ok":
+        sheets.update_boarding_status(brd_id, "подтверждена")
+        badge = "✅ ПОДТВЕРЖДЕНА"
+    else:
+        sheets.update_boarding_status(brd_id, "отклонена")
+        badge = "❌ ОТКЛОНЕНА"
+    await query.edit_message_text(
+        query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+    )
+
+    client_id = str(request.get("tg_id", "")).strip()
+    if not client_id.isdigit():
+        return
+    cli_lang = user_lang(context, client_id)
+    try:
+        if action == "brd_ok":
+            keyboard = None
+            sitter = sheets.get_sitter_any(str(request.get("ситтер_id", "")).strip()) or {}
+            sitter_wa = whatsapp_link(sitter.get("телефон", ""))
+            if sitter_wa:
+                keyboard = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton(t("btn_wa_sitter", cli_lang), url=sitter_wa)]]
+                )
+            await context.bot.send_message(
+                int(client_id),
+                t("cli_brd_confirmed", cli_lang, id=brd_id),
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        else:
+            await context.bot.send_message(
+                int(client_id),
+                t("cli_brd_declined", cli_lang, id=brd_id),
+                parse_mode="HTML",
+            )
+    except Exception:
+        logger.exception("Не удалось уведомить клиента по передержке %s", brd_id)
+
+
 async def on_error(update, context):
     logger.exception("Ошибка при обработке апдейта", exc_info=context.error)
 
@@ -926,6 +1351,7 @@ async def post_init(app):
         ("catalog", "🐾 Каталог / Catalog / קטלוג"),
         ("filters", "🔍 Фильтры / Filters / מסננים"),
         ("owner", "💼 Сдать питомца / List your pet / להשכיר"),
+        ("boarding", "🏡 Передержка / Boarding / פנסיון"),
         ("language", "🌐 Язык / Language / שפה"),
         ("help", "ℹ️ Как это работает / How it works / איך זה עובד"),
         ("cancel", "❌ Отмена / Cancel / ביטול"),
@@ -981,16 +1407,51 @@ def main():
         fallbacks=[CommandHandler("cancel", owner_cancel)],
     )
 
+    sitter_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(sitter_start, pattern=r"^sitter_form$")],
+        states={
+            SIT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_name)],
+            SIT_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_phone)],
+            SIT_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_city)],
+            SIT_ANIMALS: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_animals)],
+            SIT_EXP: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_exp)],
+            SIT_COND: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_cond)],
+            SIT_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_price)],
+            SIT_CONFIRM: [CallbackQueryHandler(sitter_confirm, pattern=r"^sit_(send|cancel)$")],
+        },
+        fallbacks=[CommandHandler("cancel", sitter_cancel)],
+    )
+
+    boarding_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(boarding_start, pattern=r"^brdreq:")],
+        states={
+            BRD_PET: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_pet)],
+            BRD_DATES: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_dates)],
+            BRD_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_city)],
+            BRD_NOTES: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_notes)],
+            BRD_PHONE: [MessageHandler(
+                (filters.TEXT & ~filters.COMMAND) | filters.CONTACT, boarding_phone
+            )],
+            BRD_CONFIRM: [CallbackQueryHandler(boarding_confirm, pattern=r"^brd_(confirm|cancel)$")],
+        },
+        fallbacks=[CommandHandler("cancel", boarding_cancel)],
+    )
+
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("catalog", cmd_catalog))
     app.add_handler(CommandHandler("filters", cmd_filters))
+    app.add_handler(CommandHandler("boarding", cmd_boarding))
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(request_conv)
     app.add_handler(owner_conv)
+    app.add_handler(sitter_conv)
+    app.add_handler(boarding_conv)
     app.add_handler(CallbackQueryHandler(admin_decision, pattern=r"^adm_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_owner_decision, pattern=r"^own_(ok|no):"))
+    app.add_handler(CallbackQueryHandler(admin_sitter_decision, pattern=r"^sit_(ok|no):"))
+    app.add_handler(CallbackQueryHandler(admin_boarding_decision, pattern=r"^brd_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_error_handler(on_error)
     logger.info("Бот PetShare Israel запущен")

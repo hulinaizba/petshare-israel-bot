@@ -180,3 +180,53 @@ def get_request(req_id):
 def update_request_status(req_id, status):
     """Меняет статус заявки в листе 'Заявки'. Возвращает True при успехе."""
     return _update_fields(config.SHEET_REQUESTS, req_id, {"статус": status})
+
+
+# ---------- Передержка: ситтеры ----------
+
+def get_sitters():
+    """Проверенные пет-ситтеры для каталога."""
+    sitters = _get_records(config.SHEET_SITTERS)
+    return [s for s in sitters if str(s.get("статус", "")).strip() == "проверен"]
+
+
+def get_sitter_any(sitter_id):
+    for s in _get_records(config.SHEET_SITTERS):
+        if str(s.get("id", "")).strip() == sitter_id:
+            return s
+    return None
+
+
+def next_sitter_id():
+    records = _get_records(config.SHEET_SITTERS)
+    return f"SIT-{len(records) + 1:03d}"
+
+
+def add_sitter(row):
+    _append_row(config.SHEET_SITTERS, row)
+
+
+def update_sitter_status(sitter_id, status):
+    return _update_fields(config.SHEET_SITTERS, sitter_id, {"статус": status})
+
+
+# ---------- Передержка: заявки ----------
+
+def next_boarding_id():
+    records = _get_records(config.SHEET_BOARDING)
+    return f"BRD-{len(records) + 1:03d}"
+
+
+def add_boarding(row):
+    _append_row(config.SHEET_BOARDING, row)
+
+
+def get_boarding(brd_id):
+    for r in _get_records(config.SHEET_BOARDING):
+        if str(r.get("id", "")).strip() == brd_id:
+            return r
+    return None
+
+
+def update_boarding_status(brd_id, status):
+    return _update_fields(config.SHEET_BOARDING, brd_id, {"статус": status})

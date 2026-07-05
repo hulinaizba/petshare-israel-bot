@@ -510,6 +510,240 @@ T = {
         "en": "😔 The form for “{name}” was declined. Contact us for details.",
         "he": "😔 השאלון עבור «{name}» נדחה. צרו איתנו קשר לפרטים.",
     },
+
+    # ---------- Передержка ----------
+    "btn_boarding": {"ru": "🏡 Передержка питомцев", "en": "🏡 Pet boarding", "he": "🏡 פנסיון לחיות מחמד"},
+    "board_menu": {
+        "ru": (
+            "🏡 <b>Передержка питомцев</b>\n\n"
+            "Улетаете в отпуск, а оставить любимца не с кем?\n"
+            "Или наоборот — любите животных и готовы присмотреть\n"
+            "за чужим питомцем за оплату?\n\n"
+            "Выберите, что вам нужно:"
+        ),
+        "en": (
+            "🏡 <b>Pet boarding</b>\n\n"
+            "Going on vacation with no one to leave your pet with?\n"
+            "Or the opposite — you love animals and are ready to look\n"
+            "after someone's pet for pay?\n\n"
+            "Choose what you need:"
+        ),
+        "he": (
+            "🏡 <b>פנסיון לחיות מחמד</b>\n\n"
+            "טסים לחופשה ואין עם מי להשאיר את חיית המחמד?\n"
+            "או להפך — אוהבים בעלי חיים ומוכנים לשמור\n"
+            "על חיית מחמד של מישהו אחר בתשלום?\n\n"
+            "בחרו מה אתם צריכים:"
+        ),
+    },
+    "btn_give_pet": {"ru": "🧳 Отдать питомца на время", "en": "🧳 Leave my pet for a while", "he": "🧳 למסור חיית מחמד לזמן מה"},
+    "btn_be_sitter": {"ru": "🤝 Стать пет-ситтером", "en": "🤝 Become a pet sitter", "he": "🤝 להיות פט-סיטר"},
+    "btn_sitters_list": {"ru": "👥 Посмотреть ситтеров", "en": "👥 Browse sitters", "he": "👥 לצפות בפט-סיטרים"},
+
+    # Анкета ситтера
+    "sit_intro": {
+        "ru": (
+            "🤝 <b>Стать пет-ситтером</b>\n\n"
+            "Короткая анкета — после проверки вы появитесь в каталоге,\n"
+            "и владельцы смогут оставлять вам питомцев за оплату.\n\n"
+            "Как вас зовут?\n\nОтменить в любой момент — /cancel"
+        ),
+        "en": (
+            "🤝 <b>Become a pet sitter</b>\n\n"
+            "A short form — after verification you will appear in the catalog,\n"
+            "and owners will be able to leave their pets with you for pay.\n\n"
+            "What is your name?\n\nCancel anytime — /cancel"
+        ),
+        "he": (
+            "🤝 <b>להיות פט-סיטר</b>\n\n"
+            "שאלון קצר — לאחר האימות תופיעו בקטלוג,\n"
+            "ובעלים יוכלו להשאיר אצלכם חיות מחמד בתשלום.\n\n"
+            "איך קוראים לכם?\n\nלביטול בכל שלב — /cancel"
+        ),
+    },
+    "sit_ask_animals": {
+        "ru": "Каких животных готовы брать? (например: собаки мелкие, кошки, грызуны)",
+        "en": "Which animals can you take? (e.g.: small dogs, cats, rodents)",
+        "he": "אילו בעלי חיים תוכלו לקחת? (לדוגמה: כלבים קטנים, חתולים, מכרסמים)",
+    },
+    "sit_ask_exp": {
+        "ru": "Ваш опыт с животными? (например: свой пёс 5 лет, работал(а) в приюте)",
+        "en": "Your experience with animals? (e.g.: own dog for 5 years, shelter volunteer)",
+        "he": "הניסיון שלכם עם בעלי חיים? (לדוגמה: כלב משלי 5 שנים, התנדבות במקלט)",
+    },
+    "sit_ask_cond": {
+        "ru": "Условия у вас: квартира или дом? есть ли двор, другие животные, дети?",
+        "en": "Your conditions: apartment or house? yard, other pets, kids?",
+        "he": "התנאים אצלכם: דירה או בית? חצר, חיות אחרות, ילדים?",
+    },
+    "sit_ask_price": {
+        "ru": "Цена за сутки передержки, ₪? (только число)",
+        "en": "Price per day of boarding, ₪? (number only)",
+        "he": "מחיר ליום פנסיון, ₪? (מספר בלבד)",
+    },
+    "sit_summary": {
+        "ru": (
+            "Проверьте анкету ситтера:\n\n"
+            "👤 {name}, {phone}, {city}\n"
+            "🐾 Берёт: {animals}\n"
+            "⭐ Опыт: {exp}\n"
+            "🏠 Условия: {cond}\n"
+            "💰 {price}₪/сутки\n\n"
+            "Отправить на проверку администратору?"
+        ),
+        "en": (
+            "Please check the sitter form:\n\n"
+            "👤 {name}, {phone}, {city}\n"
+            "🐾 Takes: {animals}\n"
+            "⭐ Experience: {exp}\n"
+            "🏠 Conditions: {cond}\n"
+            "💰 {price}₪/day\n\n"
+            "Send for review to the administrator?"
+        ),
+        "he": (
+            "בדקו את שאלון הפט-סיטר:\n\n"
+            "👤 {name}, {phone}, {city}\n"
+            "🐾 לוקח: {animals}\n"
+            "⭐ ניסיון: {exp}\n"
+            "🏠 תנאים: {cond}\n"
+            "💰 {price}₪ ליום\n\n"
+            "לשלוח לבדיקת המנהל?"
+        ),
+    },
+    "sit_approved": {
+        "ru": "🎉 Ваша анкета пет-ситтера одобрена! Вы в каталоге PetShare Israel.",
+        "en": "🎉 Your pet sitter form is approved! You are in the PetShare Israel catalog.",
+        "he": "🎉 שאלון הפט-סיטר שלכם אושר! אתם בקטלוג PetShare Israel.",
+    },
+    "sit_declined": {
+        "ru": "😔 Анкета пет-ситтера отклонена. Свяжитесь с нами, чтобы уточнить детали.",
+        "en": "😔 Your pet sitter form was declined. Contact us for details.",
+        "he": "😔 שאלון הפט-סיטר נדחה. צרו איתנו קשר לפרטים.",
+    },
+    "sitters_empty": {
+        "ru": "Проверенных ситтеров пока нет — загляните позже 🐾",
+        "en": "No verified sitters yet — come back later 🐾",
+        "he": "אין עדיין פט-סיטרים מאומתים — חזרו מאוחר יותר 🐾",
+    },
+    "sit_card_takes": {"ru": "Берёт", "en": "Takes", "he": "לוקח"},
+    "sit_card_exp": {"ru": "Опыт", "en": "Experience", "he": "ניסיון"},
+    "sit_card_cond": {"ru": "Условия", "en": "Conditions", "he": "תנאים"},
+    "sit_card_day": {"ru": "сутки", "en": "day", "he": "יום"},
+    "btn_request_sitter": {"ru": "📩 Оставить заявку", "en": "📩 Send a request", "he": "📩 לשלוח בקשה"},
+
+    # Заявка на передержку
+    "brd_intro": {
+        "ru": (
+            "🧳 <b>Заявка на передержку</b>\n\n"
+            "Расскажите о питомце: вид, порода, кличка, возраст.\n"
+            "Например: <i>собака, корги, Айза, 3 года</i>\n\n"
+            "Отменить — /cancel"
+        ),
+        "en": (
+            "🧳 <b>Boarding request</b>\n\n"
+            "Tell us about your pet: species, breed, name, age.\n"
+            "For example: <i>dog, corgi, Aiza, 3 years</i>\n\n"
+            "Cancel — /cancel"
+        ),
+        "he": (
+            "🧳 <b>בקשת פנסיון</b>\n\n"
+            "ספרו על חיית המחמד: סוג, גזע, שם, גיל.\n"
+            "לדוגמה: <i>כלב, קורגי, אייזה, 3 שנים</i>\n\n"
+            "לביטול — /cancel"
+        ),
+    },
+    "brd_intro_sitter": {
+        "ru": (
+            "🧳 <b>Заявка на передержку к ситтеру {name}</b>\n\n"
+            "Расскажите о питомце: вид, порода, кличка, возраст.\n"
+            "Например: <i>собака, корги, Айза, 3 года</i>\n\n"
+            "Отменить — /cancel"
+        ),
+        "en": (
+            "🧳 <b>Boarding request to sitter {name}</b>\n\n"
+            "Tell us about your pet: species, breed, name, age.\n"
+            "For example: <i>dog, corgi, Aiza, 3 years</i>\n\n"
+            "Cancel — /cancel"
+        ),
+        "he": (
+            "🧳 <b>בקשת פנסיון אצל {name}</b>\n\n"
+            "ספרו על חיית המחמד: סוג, גזע, שם, גיל.\n"
+            "לדוגמה: <i>כלב, קורגי, אייזה, 3 שנים</i>\n\n"
+            "לביטול — /cancel"
+        ),
+    },
+    "brd_ask_dates": {
+        "ru": "На какие даты нужна передержка? Например: <i>с 15.07 по 25.07</i>",
+        "en": "What dates do you need? For example: <i>from 15.07 to 25.07</i>",
+        "he": "לאילו תאריכים צריך פנסיון? לדוגמה: <i>מ-15.07 עד 25.07</i>",
+    },
+    "brd_ask_city": {
+        "ru": "В каком вы городе?",
+        "en": "Which city are you in?",
+        "he": "באיזו עיר אתם?",
+    },
+    "brd_ask_notes": {
+        "ru": "Особенности ухода: корм, лекарства, привычки? Если нет — напишите «нет»",
+        "en": "Care details: food, medication, habits? If none — type “no”",
+        "he": "פרטי טיפול: אוכל, תרופות, הרגלים? אם אין — כתבו «אין»",
+    },
+    "brd_summary": {
+        "ru": (
+            "Проверьте заявку на передержку:\n\n"
+            "🐾 Питомец: {pet}\n"
+            "📅 Даты: {dates}\n"
+            "📍 Город: {city}\n"
+            "📝 Особенности: {notes}\n"
+            "📱 Телефон: {phone}\n"
+            "{sitter_line}\n"
+            "Отправить заявку?"
+        ),
+        "en": (
+            "Please check your boarding request:\n\n"
+            "🐾 Pet: {pet}\n"
+            "📅 Dates: {dates}\n"
+            "📍 City: {city}\n"
+            "📝 Care details: {notes}\n"
+            "📱 Phone: {phone}\n"
+            "{sitter_line}\n"
+            "Send the request?"
+        ),
+        "he": (
+            "בדקו את בקשת הפנסיון:\n\n"
+            "🐾 חיית מחמד: {pet}\n"
+            "📅 תאריכים: {dates}\n"
+            "📍 עיר: {city}\n"
+            "📝 פרטי טיפול: {notes}\n"
+            "📱 טלפון: {phone}\n"
+            "{sitter_line}\n"
+            "לשלוח את הבקשה?"
+        ),
+    },
+    "brd_sitter_line": {
+        "ru": "🤝 Ситтер: {name}\n",
+        "en": "🤝 Sitter: {name}\n",
+        "he": "🤝 פט-סיטר: {name}\n",
+    },
+    "brd_sent": {
+        "ru": "✅ Заявка <b>{id}</b> отправлена!\n\nМы подберём проверенного ситтера и свяжемся с вами 🐾",
+        "en": "✅ Request <b>{id}</b> sent!\n\nWe will find a verified sitter and contact you 🐾",
+        "he": "✅ הבקשה <b>{id}</b> נשלחה!\n\nנמצא פט-סיטר מאומת וניצור קשר 🐾",
+    },
+    "cli_brd_confirmed": {
+        "ru": "🎉 Заявка на передержку <b>{id}</b> подтверждена!\n\nСвяжитесь с ситтером, чтобы договориться о деталях:",
+        "en": "🎉 Boarding request <b>{id}</b> confirmed!\n\nContact the sitter to arrange the details:",
+        "he": "🎉 בקשת הפנסיון <b>{id}</b> אושרה!\n\nצרו קשר עם הפט-סיטר לתיאום:",
+    },
+    "btn_wa_sitter": {
+        "ru": "💬 Написать ситтеру в WhatsApp",
+        "en": "💬 Message the sitter on WhatsApp",
+        "he": "💬 לכתוב לפט-סיטר בוואטסאפ",
+    },
+    "cli_brd_declined": {
+        "ru": "😔 К сожалению, заявка на передержку <b>{id}</b> отклонена — на эти даты нет свободных ситтеров.\n\nПопробуйте другие даты 🐾",
+        "en": "😔 Unfortunately, boarding request <b>{id}</b> was declined — no sitters available for these dates.\n\nTry other dates 🐾",
+        "he": "😔 לצערנו בקשת הפנסיון <b>{id}</b> נדחתה — אין פט-סיטרים פנויים בתאריכים אלה.\n\nנסו תאריכים אחרים 🐾",
+    },
 }
 
 

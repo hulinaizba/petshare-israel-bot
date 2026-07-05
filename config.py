@@ -40,3 +40,5 @@ SPREADSHEET_ID = os.environ.get("PETSHARE_SPREADSHEET_ID", "")
 SHEET_ANIMALS = "Животные"
 SHEET_REQUESTS = "Заявки"
 SHEET_OWNERS = "Владельцы"
+SHEET_SITTERS = "Ситтеры"
+SHEET_BOARDING = "Передержка"

@@ -193,3 +193,38 @@ def test_format_card_in_english():
 def test_format_card_in_hebrew():
     text = bot.format_card(ANIMALS[0], 1, 2, "he")
     assert "כרטיס" in text
+
+
+# ---------- Передержка ----------
+
+SITTERS = [
+    {"id": "SIT-001", "имя": "Дана", "телефон": "+972-50-111-1111", "tg_id": 201,
+     "город": "Тель-Авив", "животные": "собаки мелкие, кошки", "опыт": "свой пёс 5 лет",
+     "условия": "квартира, без детей", "цена_сутки": 80, "статус": "проверен"},
+    {"id": "SIT-002", "имя": "Игорь", "телефон": "+972-50-222-2222", "tg_id": 202,
+     "город": "Хайфа", "животные": "все", "опыт": "ветеринар",
+     "условия": "дом с двором", "цена_сутки": 120, "статус": "на проверке"},
+]
+
+
+def test_only_verified_sitters_listed():
+    put_cache(config.SHEET_SITTERS, SITTERS)
+    listed = sheets.get_sitters()
+    assert [s["id"] for s in listed] == ["SIT-001"]
+    # но для модерации доступен любой
+    assert sheets.get_sitter_any("SIT-002")["имя"] == "Игорь"
+
+
+def test_format_sitter_card():
+    put_cache(config.SHEET_SITTERS, SITTERS)
+    text = bot.format_sitter_card(SITTERS[0], 1, 1, "ru")
+    assert "Дана" in text
+    assert "80₪/сутки" in text
+    text_en = bot.format_sitter_card(SITTERS[0], 1, 1, "en")
+    assert "80₪/day" in text_en
+
+
+def test_boarding_translations_complete():
+    for key in ("board_menu", "sit_intro", "brd_intro", "brd_summary", "cli_brd_confirmed"):
+        for lang in i18n.LANGS:
+            assert i18n.T[key].get(lang)
