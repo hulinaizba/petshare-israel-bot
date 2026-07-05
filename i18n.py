@@ -335,6 +335,46 @@ T = {
         "en": "😔 Unfortunately, ride <b>{id}</b> was not confirmed — the date is taken.\n\nTry another date or another horse 🐴",
         "he": "😔 לצערנו הרכיבה <b>{id}</b> לא אושרה — התאריך תפוס.\n\nנסו תאריך אחר או סוס אחר 🐴",
     },
+
+    # ---------- Мои заявки ----------
+    "btn_my": {"ru": "📋 Мои заявки", "en": "📋 My requests", "he": "📋 הבקשות שלי"},
+    "my_title": {"ru": "📋 <b>Мои заявки</b>", "en": "📋 <b>My requests</b>", "he": "📋 <b>הבקשות שלי</b>"},
+    "my_empty": {
+        "ru": "У вас пока нет заявок. Загляните в каталог 🐾",
+        "en": "You have no requests yet. Check the catalog 🐾",
+        "he": "אין לכם עדיין בקשות. הציצו בקטלוג 🐾",
+    },
+    "my_rentals": {"ru": "🐾 Аренда", "en": "🐾 Rentals", "he": "🐾 השכרות"},
+    "my_boardings": {"ru": "🏡 Передержка", "en": "🏡 Boarding", "he": "🏡 פנסיון"},
+    "my_rides": {"ru": "🐴 Прогулки", "en": "🐴 Rides", "he": "🐴 רכיבות"},
+    "my_matches": {"ru": "💞 Знакомства", "en": "💞 Meetings", "he": "💞 היכרויות"},
+
+    # ---------- Отзывы ----------
+    "review_pick": {
+        "ru": "⭐ <b>Оставить отзыв</b>\n\nВыберите, о чём хотите рассказать:",
+        "en": "⭐ <b>Leave a review</b>\n\nChoose what you want to review:",
+        "he": "⭐ <b>להשאיר ביקורת</b>\n\nבחרו על מה תרצו לספר:",
+    },
+    "review_none": {
+        "ru": "Отзыв можно оставить после подтверждённой сделки. Пока таких нет 🐾",
+        "en": "You can leave a review after a confirmed booking. None yet 🐾",
+        "he": "אפשר להשאיר ביקורת אחרי הזמנה מאושרת. עדיין אין כאלה 🐾",
+    },
+    "review_rate": {
+        "ru": "Оцените от 1 до 5 звёзд:",
+        "en": "Rate from 1 to 5 stars:",
+        "he": "דרגו מ-1 עד 5 כוכבים:",
+    },
+    "review_text": {
+        "ru": "Напишите пару слов — что понравилось, что можно улучшить?",
+        "en": "Write a few words — what did you like, what could be better?",
+        "he": "כתבו כמה מילים — מה אהבתם, מה אפשר לשפר?",
+    },
+    "review_saved": {
+        "ru": "🙏 Спасибо за отзыв! Он поможет другим выбрать 🐾",
+        "en": "🙏 Thank you for the review! It will help others choose 🐾",
+        "he": "🙏 תודה על הביקורת! היא תעזור לאחרים לבחור 🐾",
+    },
     "lang_set": {
         "ru": "✅ Язык переключён на русский.",
         "en": "✅ Language switched to English.",
@@ -1257,6 +1297,16 @@ VALUES = {
     "низкий": {"en": "low", "he": "נמוכה"},
     "средний": {"en": "medium", "he": "בינונית"},
     "высокий": {"en": "high", "he": "גבוהה"},
+    # статусы заявок и анкет
+    "новая": {"en": "new", "he": "חדשה"},
+    "подтверждена": {"en": "confirmed", "he": "אושרה"},
+    "отклонена": {"en": "declined", "he": "נדחתה"},
+    "одобрена": {"en": "approved", "he": "אושרה"},
+    "на проверке": {"en": "under review", "he": "בבדיקה"},
+    "проверен": {"en": "verified", "he": "מאומת"},
+    "проверено": {"en": "verified", "he": "מאומת"},
+    "отклонено": {"en": "declined", "he": "נדחה"},
+    "отклонён": {"en": "declined", "he": "נדחה"},
 }
 
 

@@ -304,6 +304,66 @@ def test_format_friend_card():
     assert "female" in text_en
 
 
+# ---------- Отзывы, рейтинги, мои заявки ----------
+
+REVIEWS = [
+    {"id": "REV-001", "объект_id": "AN-001", "рейтинг": 5, "tg": 111},
+    {"id": "REV-002", "объект_id": "AN-001", "рейтинг": 4, "tg": 222},
+    {"id": "REV-003", "объект_id": "HRS-001", "рейтинг": 5, "tg": 111},
+    {"id": "REV-004", "объект_id": "AN-001", "рейтинг": "мусор", "tg": 333},
+]
+
+
+def test_get_rating_average():
+    put_cache(config.SHEET_REVIEWS, REVIEWS)
+    avg, count = sheets.get_rating("AN-001")
+    assert avg == 4.5 and count == 2  # «мусор» не считается
+    avg, count = sheets.get_rating("HRS-001")
+    assert avg == 5.0 and count == 1
+    avg, count = sheets.get_rating("AN-999")
+    assert avg is None and count == 0
+
+
+def test_rating_line_format():
+    put_cache(config.SHEET_REVIEWS, REVIEWS)
+    assert bot.rating_line("AN-001") == "⭐ 4.5 (2)"
+    assert bot.rating_line("AN-999") == ""
+
+
+def test_card_shows_rating():
+    put_cache(config.SHEET_REVIEWS, REVIEWS)
+    text = bot.format_card(ANIMALS[0], 1, 1, "ru", rating=bot.rating_line("AN-001"))
+    assert "⭐ 4.5 (2)" in text
+
+
+def test_requests_by_tg():
+    put_cache(config.SHEET_REQUESTS, [
+        {"id": "REQ-001", "клиент_tg_id": 111, "статус": "подтверждена",
+         "животное_id": "AN-001", "животное_имя": "Луна"},
+        {"id": "REQ-002", "клиент_tg_id": 999, "статус": "новая",
+         "животное_id": "AN-002", "животное_имя": "Омар"},
+    ])
+    mine = sheets.get_requests_by_tg(config.SHEET_REQUESTS, "клиент_tg_id", 111)
+    assert [r["id"] for r in mine] == ["REQ-001"]
+
+
+def test_reviewable_items_only_confirmed():
+    put_cache(config.SHEET_REQUESTS, [
+        {"id": "REQ-001", "клиент_tg_id": 111, "статус": "подтверждена",
+         "животное_id": "AN-001", "животное_имя": "Луна"},
+        {"id": "REQ-002", "клиент_tg_id": 111, "статус": "новая",
+         "животное_id": "AN-002", "животное_имя": "Омар"},
+    ])
+    put_cache(config.SHEET_BOARDING, [])
+    put_cache(config.SHEET_RIDES, [
+        {"id": "RID-001", "tg_id": 111, "статус": "подтверждена",
+         "лошадь_id": "HRS-001", "кличка": "Шира"},
+    ])
+    items = bot.reviewable_items(111)
+    ids = [req_id for req_id, _, _ in items]
+    assert ids == ["REQ-001", "RID-001"]  # только подтверждённые
+
+
 # ---------- Конные прогулки ----------
 
 HORSES = [

@@ -353,6 +353,39 @@ def update_ride_status(ride_id, status):
     return _update_fields(config.SHEET_RIDES, ride_id, {"статус": status})
 
 
+# ---------- Отзывы и рейтинги ----------
+
+def next_review_id():
+    records = _get_records(config.SHEET_REVIEWS)
+    return f"REV-{len(records) + 1:03d}"
+
+
+def add_review(row):
+    _append_row(config.SHEET_REVIEWS, row)
+
+
+def get_rating(obj_id):
+    """Средний рейтинг объекта (животного/лошади/ситтера): (среднее, кол-во)."""
+    ratings = []
+    for r in _get_records(config.SHEET_REVIEWS):
+        if str(r.get("объект_id", "")).strip() == str(obj_id):
+            try:
+                ratings.append(int(r.get("рейтинг", 0)))
+            except (ValueError, TypeError):
+                continue
+    if not ratings:
+        return None, 0
+    return round(sum(ratings) / len(ratings), 1), len(ratings)
+
+
+def get_requests_by_tg(sheet_name, tg_field, tg_id):
+    """Заявки пользователя из указанного листа."""
+    return [
+        r for r in _get_records(sheet_name)
+        if str(r.get(tg_field, "")).strip() == str(tg_id)
+    ]
+
+
 # ---------- Сообщения (переписка через бота) ----------
 
 def next_message_id():

@@ -10,6 +10,7 @@ from datetime import datetime
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     KeyboardButton,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
@@ -91,6 +92,9 @@ WRITE_MSG = 70
 # Состояния заявки на конную прогулку
 RID_TIME, RID_DATE, RID_PEOPLE, RID_EXP, RID_WISHES, RID_PHONE, RID_CONFIRM = range(100, 107)
 
+# Состояния отзыва
+REV_PICK, REV_RATE, REV_TEXT = range(110, 113)
+
 # Сервисный сбор за организацию вязки, ₪ (дружба — бесплатно)
 MATING_FEE = 50
 
@@ -145,6 +149,52 @@ def language_keyboard():
     ])
 
 
+async def safe_edit(query, text, reply_markup=None, parse_mode=None):
+    """Правит текст экрана; если предыдущий экран был фото — заменяет сообщение."""
+    try:
+        if query.message and query.message.photo:
+            await query.message.delete()
+            await query.message.chat.send_message(
+                text, reply_markup=reply_markup, parse_mode=parse_mode
+            )
+        else:
+            await query.edit_message_text(
+                text, reply_markup=reply_markup, parse_mode=parse_mode
+            )
+    except Exception:
+        logger.exception("safe_edit: не удалось отредактировать, отправляю новое")
+        await query.message.chat.send_message(
+            text, reply_markup=reply_markup, parse_mode=parse_mode
+        )
+
+
+async def show_card(query, text, keyboard, photo):
+    """Показывает карточку: с фото — как фото с подписью, без — текстом."""
+    msg = query.message
+    try:
+        if photo:
+            media = InputMediaPhoto(media=photo, caption=text, parse_mode="HTML")
+            if msg.photo:
+                await query.edit_message_media(media=media, reply_markup=keyboard)
+            else:
+                await msg.delete()
+                await msg.chat.send_photo(
+                    photo, caption=text, parse_mode="HTML", reply_markup=keyboard
+                )
+        else:
+            await safe_edit(query, text, reply_markup=keyboard, parse_mode="HTML")
+    except Exception:
+        # битое фото (устаревший file_id/ссылка) — показываем текстом
+        logger.exception("show_card: фото не показалось, отправляю текст")
+        await safe_edit(query, text, reply_markup=keyboard, parse_mode="HTML")
+
+
+def rating_line(obj_id):
+    """Строка рейтинга «⭐ 4.8 (3)» или пустая, если отзывов нет."""
+    avg, count = sheets.get_rating(obj_id)
+    return f"⭐ {avg} ({count})" if count else ""
+
+
 def main_menu_keyboard(lang):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(t("btn_catalog", lang), callback_data="catalog")],
@@ -168,9 +218,12 @@ def horses_menu_keyboard(lang):
     ])
 
 
-def format_horse_card(horse, position, total, lang):
+def format_horse_card(horse, position, total, lang, rating=""):
+    title = f"🐴 <b>{horse.get('кличка', '')}</b> — {horse.get('порода', '')}"
+    if rating:
+        title += f"   {rating}"
     lines = [
-        f"🐴 <b>{horse.get('кличка', '')}</b> — {horse.get('порода', '')}",
+        title,
         "",
         f"📍 {tr_value(horse.get('город', ''), lang)}   |   "
         f"{t('card_age', lang)}: {horse.get('возраст', '')}",
@@ -223,9 +276,12 @@ def board_menu_keyboard(lang):
     ])
 
 
-def format_sitter_card(sitter, position, total, lang):
+def format_sitter_card(sitter, position, total, lang, rating=""):
+    title = f"🤝 <b>{sitter.get('имя', '')}</b> — 📍 {tr_value(sitter.get('город', ''), lang)}"
+    if rating:
+        title += f"   {rating}"
     return "\n".join([
-        f"🤝 <b>{sitter.get('имя', '')}</b> — 📍 {tr_value(sitter.get('город', ''), lang)}",
+        title,
         "",
         f"🐾 {t('sit_card_takes', lang)}: {sitter.get('животные', '')}",
         f"⭐ {t('sit_card_exp', lang)}: {sitter.get('опыт', '')}",
@@ -332,11 +388,14 @@ def localized_field(animal, field, lang):
     return str(animal.get(field, "")).strip()
 
 
-def format_card(animal, position, total, lang="ru"):
+def format_card(animal, position, total, lang="ru", rating=""):
     """Собирает текст карточки животного."""
     risk = str(animal.get("уровень_риска", "")).strip()
+    title = f"🐾 <b>{animal.get('имя', '')}</b> — {animal.get('порода', '')}"
+    if rating:
+        title += f"   {rating}"
     lines = [
-        f"🐾 <b>{animal.get('имя', '')}</b> — {animal.get('порода', '')}",
+        title,
         "",
         f"📍 {tr_value(animal.get('город', ''), lang)}   |   "
         f"{t('card_age', lang)}: {animal.get('возраст', '')}",
@@ -450,6 +509,133 @@ async def cmd_horses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_my(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Личный кабинет: все заявки пользователя со статусами."""
+    lang = L(context)
+    uid = update.effective_user.id
+    sections = [
+        ("my_rentals", config.SHEET_REQUESTS, "клиент_tg_id",
+         lambda r: f"{r.get('id')} — {r.get('животное_имя', '')}, {r.get('дата_аренды', '')}"),
+        ("my_boardings", config.SHEET_BOARDING, "tg_id",
+         lambda r: f"{r.get('id')} — {r.get('питомец', '')}, {r.get('даты', '')}"),
+        ("my_rides", config.SHEET_RIDES, "tg_id",
+         lambda r: f"{r.get('id')} — {r.get('кличка', '')}, {r.get('дата', '')}"),
+        ("my_matches", config.SHEET_MATCHES, "кто_tg",
+         lambda r: f"{r.get('id')} — {r.get('кто_кличка', '')} 💘 {r.get('кого_кличка', '')}"),
+    ]
+    blocks = []
+    for title_key, sheet_name, tg_field, line_fn in sections:
+        rows = sheets.get_requests_by_tg(sheet_name, tg_field, uid)
+        if not rows:
+            continue
+        lines = [f"<b>{t(title_key, lang)}</b>"]
+        for r in rows[-5:]:  # последние 5 в каждой категории
+            status = tr_value(str(r.get("статус", "")).strip(), lang)
+            lines.append(f"  {line_fn(r)} — <i>{status}</i>")
+        blocks.append("\n".join(lines))
+    if not blocks:
+        await update.message.reply_text(
+            t("my_empty", lang), reply_markup=main_menu_keyboard(lang)
+        )
+        return
+    await update.message.reply_text(
+        t("my_title", lang) + "\n\n" + "\n\n".join(blocks), parse_mode="HTML"
+    )
+
+
+# ---------- Отзывы ----------
+
+def reviewable_items(uid):
+    """Подтверждённые сделки пользователя: (заявка_id, объект_id, подпись)."""
+    items = []
+    for r in sheets.get_requests_by_tg(config.SHEET_REQUESTS, "клиент_tg_id", uid):
+        if str(r.get("статус", "")).strip() == "подтверждена":
+            items.append((r.get("id"), r.get("животное_id"), f"🐾 {r.get('животное_имя', '')}"))
+    for r in sheets.get_requests_by_tg(config.SHEET_BOARDING, "tg_id", uid):
+        if str(r.get("статус", "")).strip() == "подтверждена" and str(r.get("ситтер_id", "")).strip():
+            sitter = sheets.get_sitter_any(str(r.get("ситтер_id")).strip()) or {}
+            items.append((r.get("id"), r.get("ситтер_id"), f"🏡 {sitter.get('имя', '')}"))
+    for r in sheets.get_requests_by_tg(config.SHEET_RIDES, "tg_id", uid):
+        if str(r.get("статус", "")).strip() == "подтверждена":
+            items.append((r.get("id"), r.get("лошадь_id"), f"🐴 {r.get('кличка', '')}"))
+    return items[-8:]
+
+
+async def review_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    items = reviewable_items(update.effective_user.id)
+    if not items:
+        await update.message.reply_text(t("review_none", lang))
+        return ConversationHandler.END
+    rows = [
+        [InlineKeyboardButton(f"{label} ({req_id})", callback_data=f"rpick:{req_id}:{obj_id}")]
+        for req_id, obj_id, label in items
+    ]
+    await update.message.reply_text(
+        t("review_pick", lang), reply_markup=InlineKeyboardMarkup(rows), parse_mode="HTML"
+    )
+    return REV_PICK
+
+
+async def review_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    _, req_id, obj_id = query.data.split(":", 2)
+    context.user_data["rev_flow"] = {"req_id": req_id, "obj_id": obj_id}
+    rows = [[InlineKeyboardButton("⭐" * n, callback_data=f"rstar:{n}")] for n in range(5, 0, -1)]
+    await query.message.reply_text(
+        t("review_rate", lang), reply_markup=InlineKeyboardMarkup(rows)
+    )
+    return REV_RATE
+
+
+async def review_rate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["rev_flow"]["rating"] = int(query.data.split(":", 1)[1])
+    await query.message.reply_text(t("review_text", L(context)))
+    return REV_TEXT
+
+
+async def review_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    flow = context.user_data.get("rev_flow") or {}
+    user = update.effective_user
+    rev_id = sheets.next_review_id()
+    sheets.add_review([
+        rev_id,
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        user.full_name,
+        user.id,
+        flow.get("req_id", ""),
+        flow.get("obj_id", ""),
+        flow.get("rating", 0),
+        update.message.text.strip(),
+    ])
+    await update.message.reply_text(t("review_saved", lang))
+    try:
+        await context.bot.send_message(
+            config.ADMIN_CHAT_ID,
+            f"⭐ <b>Новый отзыв {rev_id}</b>: {'⭐' * flow.get('rating', 0)}\n"
+            f"👤 {user.full_name} по заявке {flow.get('req_id', '')} "
+            f"({flow.get('obj_id', '')}):\n\n{update.message.text.strip()}",
+            parse_mode="HTML",
+        )
+    except Exception:
+        logger.exception("Не отправлен отзыв администратору")
+    context.user_data.pop("rev_flow", None)
+    return ConversationHandler.END
+
+
+async def review_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("rev_flow", None)
+    await update.message.reply_text(
+        t("req_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс кэша таблицы (только для администратора)."""
     if update.effective_user.id != config.ADMIN_CHAT_ID:
@@ -517,7 +703,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "lang":
-        await query.edit_message_text(
+        await safe_edit(query,
             t("choose_lang", lang), reply_markup=language_keyboard()
         )
         return
@@ -525,7 +711,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("lang_set:"):
         new_lang = data.split(":", 1)[1]
         context.user_data["lang"] = new_lang
-        await query.edit_message_text(t("lang_set", new_lang))
+        await safe_edit(query,t("lang_set", new_lang))
         await query.message.reply_text(
             t("welcome", new_lang),
             reply_markup=main_menu_keyboard(new_lang),
@@ -534,25 +720,25 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "menu":
-        await query.edit_message_text(
+        await safe_edit(query,
             t("menu_short", lang), reply_markup=main_menu_keyboard(lang), parse_mode="HTML"
         )
         return
 
     if data == "about":
-        await query.edit_message_text(
+        await safe_edit(query,
             t("about", lang), reply_markup=about_keyboard(lang), parse_mode="HTML"
         )
         return
 
     if data == "board_menu":
-        await query.edit_message_text(
+        await safe_edit(query,
             t("board_menu", lang), reply_markup=board_menu_keyboard(lang), parse_mode="HTML"
         )
         return
 
     if data == "horses_menu":
-        await query.edit_message_text(
+        await safe_edit(query,
             t("horses_menu", lang), reply_markup=horses_menu_keyboard(lang), parse_mode="HTML"
         )
         return
@@ -560,7 +746,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("hrscard:"):
         horses = sheets.get_horses()
         if not horses:
-            await query.edit_message_text(
+            await safe_edit(query,
                 t("horses_empty", lang), reply_markup=horses_menu_keyboard(lang)
             )
             return
@@ -584,15 +770,17 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("btn_horses", lang), callback_data="horses_menu"),
             InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
         ])
-        await query.edit_message_text(
-            format_horse_card(horse, index + 1, total, lang),
-            reply_markup=InlineKeyboardMarkup(rows),
-            parse_mode="HTML",
+        await show_card(
+            query,
+            format_horse_card(horse, index + 1, total, lang,
+                              rating=rating_line(horse.get("id", ""))),
+            InlineKeyboardMarkup(rows),
+            str(horse.get("фото", "")).strip(),
         )
         return
 
     if data == "frd_menu":
-        await query.edit_message_text(
+        await safe_edit(query,
             t("frd_menu", lang, mating_fee=MATING_FEE),
             reply_markup=friends_menu_keyboard(lang),
             parse_mode="HTML",
@@ -603,7 +791,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _, goal, index_str = data.split(":", 2)
         profiles = sheets.get_friend_profiles(goal)
         if not profiles:
-            await query.edit_message_text(
+            await safe_edit(query,
                 t("frd_empty", lang), reply_markup=friends_menu_keyboard(lang)
             )
             return
@@ -627,10 +815,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("btn_friends", lang), callback_data="frd_menu"),
             InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
         ])
-        await query.edit_message_text(
+        await show_card(
+            query,
             format_friend_card(profile, index + 1, total, lang),
-            reply_markup=InlineKeyboardMarkup(rows),
-            parse_mode="HTML",
+            InlineKeyboardMarkup(rows),
+            str(profile.get("фото", "")).strip(),
         )
         return
 
@@ -712,7 +901,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("sitcard:"):
         sitters = sheets.get_sitters()
         if not sitters:
-            await query.edit_message_text(
+            await safe_edit(query,
                 t("sitters_empty", lang), reply_markup=board_menu_keyboard(lang)
             )
             return
@@ -736,8 +925,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("btn_boarding", lang), callback_data="board_menu"),
             InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
         ])
-        await query.edit_message_text(
-            format_sitter_card(sitter, index + 1, total, lang),
+        await safe_edit(
+            query,
+            format_sitter_card(sitter, index + 1, total, lang,
+                               rating=rating_line(sitter.get("id", ""))),
             reply_markup=InlineKeyboardMarkup(rows),
             parse_mode="HTML",
         )
@@ -746,23 +937,25 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "catalog":
         keyboard = catalog_keyboard(lang)
         if keyboard is None:
-            await query.edit_message_text(t("catalog_empty", lang))
+            await safe_edit(query,t("catalog_empty", lang))
             return
-        await query.edit_message_text(t("choose_category", lang), reply_markup=keyboard)
+        await safe_edit(query,t("choose_category", lang), reply_markup=keyboard)
         return
 
     if data.startswith("card:"):
         _, category, index_str = data.split(":", 2)
         animals = sheets.get_animals_by_category(category)
         if not animals:
-            await query.edit_message_text(t("category_empty", lang))
+            await safe_edit(query,t("category_empty", lang))
             return
         index = int(index_str) % len(animals)
         animal = animals[index]
-        await query.edit_message_text(
-            format_card(animal, index + 1, len(animals), lang),
-            reply_markup=card_keyboard(category, index, len(animals), animal.get("id", ""), lang),
-            parse_mode="HTML",
+        await show_card(
+            query,
+            format_card(animal, index + 1, len(animals), lang,
+                        rating=rating_line(animal.get("id", ""))),
+            card_keyboard(category, index, len(animals), animal.get("id", ""), lang),
+            str(animal.get("фото_url", "")).strip(),
         )
         return
 
@@ -773,7 +966,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for key in ("filt_city", "filt_price", "filt_kids"):
                 context.user_data.pop(key, None)
         text, keyboard = filter_menu(context)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit(query,text, reply_markup=keyboard, parse_mode="HTML")
         return
 
     if data == "f_city":
@@ -787,7 +980,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(f"📍 {tr_value(c, lang)}", callback_data=f"f_city_set:{c}")]
             for c in sorted(cities)
         ]
-        await query.edit_message_text(
+        await safe_edit(query,
             t("choose_city_txt", lang), reply_markup=InlineKeyboardMarkup(rows)
         )
         return
@@ -795,7 +988,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("f_city_set:"):
         context.user_data["filt_city"] = data.split(":", 1)[1]
         text, keyboard = filter_menu(context)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit(query,text, reply_markup=keyboard, parse_mode="HTML")
         return
 
     if data == "f_price":
@@ -803,7 +996,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(t(f"price_{key}", lang), callback_data=f"f_price_set:{key}")]
             for key in PRICE_CHECKS
         ]
-        await query.edit_message_text(
+        await safe_edit(query,
             t("choose_price_txt", lang), reply_markup=InlineKeyboardMarkup(rows)
         )
         return
@@ -811,21 +1004,21 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("f_price_set:"):
         context.user_data["filt_price"] = data.split(":", 1)[1]
         text, keyboard = filter_menu(context)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit(query,text, reply_markup=keyboard, parse_mode="HTML")
         return
 
     if data == "f_kids":
         current = context.user_data.get("filt_kids", "any")
         context.user_data["filt_kids"] = "да" if current == "any" else "any"
         text, keyboard = filter_menu(context)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        await safe_edit(query,text, reply_markup=keyboard, parse_mode="HTML")
         return
 
     if data.startswith("fcard:"):
         animals = apply_filters(sheets.get_animals(), get_filters(context))
         if not animals:
             text, keyboard = filter_menu(context)
-            await query.edit_message_text(
+            await safe_edit(query,
                 t("flt_none", lang) + "\n\n" + text,
                 reply_markup=keyboard,
                 parse_mode="HTML",
@@ -848,10 +1041,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("btn_flt_back", lang), callback_data="filters"),
             InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
         ])
-        await query.edit_message_text(
-            format_card(animal, index + 1, total, lang),
-            reply_markup=InlineKeyboardMarkup(rows),
-            parse_mode="HTML",
+        await show_card(
+            query,
+            format_card(animal, index + 1, total, lang,
+                        rating=rating_line(animal.get("id", ""))),
+            InlineKeyboardMarkup(rows),
+            str(animal.get("фото_url", "")).strip(),
         )
         return
 
@@ -922,7 +1117,7 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "req_cancel":
-        await query.edit_message_text(t("req_cancelled", lang))
+        await safe_edit(query,t("req_cancelled", lang))
         for key in ("req_animal", "req_date", "req_phone"):
             context.user_data.pop(key, None)
         return ConversationHandler.END
@@ -953,7 +1148,7 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         platform_income,
     ])
 
-    await query.edit_message_text(t("req_sent", lang, id=req_id), parse_mode="HTML")
+    await safe_edit(query,t("req_sent", lang, id=req_id), parse_mode="HTML")
 
     # Уведомление администратору (всегда на русском)
     owner = sheets.get_owner_by_id(str(animal.get("владелец_id", "")).strip()) or {}
@@ -1023,7 +1218,7 @@ async def admin_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sheets.update_request_status(req_id, new_status)
 
     # Убираем кнопки и помечаем решение в тексте уведомления
-    await query.edit_message_text(
+    await safe_edit(query,
         query.message.text_html + f"\n\n<b>{badge}</b>",
         parse_mode="HTML",
     )
@@ -1304,7 +1499,7 @@ async def admin_owner_decision(update: Update, context: ContextTypes.DEFAULT_TYP
             caption=query.message.caption_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
         )
     else:
-        await query.edit_message_text(
+        await safe_edit(query,
             query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
         )
 
@@ -1462,7 +1657,7 @@ async def admin_sitter_decision(update: Update, context: ContextTypes.DEFAULT_TY
     else:
         sheets.update_sitter_status(sitter_id, "отклонён")
         badge = "❌ ОТКЛОНЕНО"
-    await query.edit_message_text(
+    await safe_edit(query,
         query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
     )
 
@@ -1577,7 +1772,7 @@ async def boarding_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "brd_cancel":
-        await query.edit_message_text(t("req_cancelled", lang))
+        await safe_edit(query,t("req_cancelled", lang))
         context.user_data.pop("brd_flow", None)
         return ConversationHandler.END
 
@@ -1614,7 +1809,7 @@ async def boarding_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sitter_commission,
         platform_income,
     ])
-    await query.edit_message_text(t("brd_sent", lang, id=brd_id), parse_mode="HTML")
+    await safe_edit(query,t("brd_sent", lang, id=brd_id), parse_mode="HTML")
 
     sitter_info = (
         f"🤝 Ситтер: {sitter.get('имя', '')}, {sitter.get('телефон', '')} "
@@ -1687,7 +1882,7 @@ async def admin_boarding_decision(update: Update, context: ContextTypes.DEFAULT_
     else:
         sheets.update_boarding_status(brd_id, "отклонена")
         badge = "❌ ОТКЛОНЕНА"
-    await query.edit_message_text(
+    await safe_edit(query,
         query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
     )
 
@@ -1917,7 +2112,7 @@ async def admin_friend_decision(update: Update, context: ContextTypes.DEFAULT_TY
             caption=query.message.caption_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
         )
     else:
-        await query.edit_message_text(
+        await safe_edit(query,
             query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
         )
 
@@ -1954,7 +2149,7 @@ async def admin_match_decision(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         sheets.update_match_status(match_id, "отклонена")
         badge = "❌ ОТКЛОНЕНО"
-    await query.edit_message_text(
+    await safe_edit(query,
         query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
     )
 
@@ -2332,7 +2527,7 @@ async def admin_horse_decision(update: Update, context: ContextTypes.DEFAULT_TYP
             caption=query.message.caption_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
         )
     else:
-        await query.edit_message_text(
+        await safe_edit(query,
             query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
         )
 
@@ -2465,7 +2660,7 @@ async def ride_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "rid_cancel":
-        await query.edit_message_text(t("req_cancelled", lang))
+        await safe_edit(query,t("req_cancelled", lang))
         context.user_data.pop("rid_flow", None)
         return ConversationHandler.END
 
@@ -2500,7 +2695,7 @@ async def ride_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         platform_income,
         "новая",
     ])
-    await query.edit_message_text(t("rid_sent", lang, id=ride_id), parse_mode="HTML")
+    await safe_edit(query,t("rid_sent", lang, id=ride_id), parse_mode="HTML")
 
     horse = sheets.get_horse_any(flow["horse_id"]) or {}
     admin_text = (
@@ -2563,7 +2758,7 @@ async def admin_ride_decision(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         sheets.update_ride_status(ride_id, "отклонена")
         badge = "❌ ОТКЛОНЕНА"
-    await query.edit_message_text(
+    await safe_edit(query,
         query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
     )
 
@@ -2644,6 +2839,8 @@ async def post_init(app):
         ("boarding", "🏡 Передержка / Boarding / פנסיון"),
         ("friends", "💞 Знакомства / Matchmaking / היכרויות"),
         ("horses", "🐴 Конные прогулки / Horse rides / רכיבה"),
+        ("my", "📋 Мои заявки / My requests / הבקשות שלי"),
+        ("review", "⭐ Оставить отзыв / Leave a review / ביקורת"),
         ("language", "🌐 Язык / Language / שפה"),
         ("help", "ℹ️ Как это работает / How it works / איך זה עובד"),
         ("cancel", "❌ Отмена / Cancel / ביטול"),
@@ -2787,6 +2984,7 @@ def main():
     app.add_handler(CommandHandler("boarding", cmd_boarding))
     app.add_handler(CommandHandler("friends", cmd_friends))
     app.add_handler(CommandHandler("horses", cmd_horses))
+    app.add_handler(CommandHandler("my", cmd_my))
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
@@ -2856,6 +3054,23 @@ def main():
         conversation_timeout=1800,
     )
 
+    review_conv = ConversationHandler(
+        entry_points=[CommandHandler("review", review_start)],
+        states={
+            REV_PICK: [
+                CallbackQueryHandler(review_pick, pattern=r"^rpick:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            REV_RATE: [
+                CallbackQueryHandler(review_rate, pattern=r"^rstar:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            REV_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, review_text)],
+        },
+        fallbacks=[CommandHandler("cancel", review_cancel)],
+        conversation_timeout=1800,
+    )
+
     app.add_handler(request_conv)
     app.add_handler(owner_conv)
     app.add_handler(sitter_conv)
@@ -2864,6 +3079,7 @@ def main():
     app.add_handler(horse_conv)
     app.add_handler(ride_conv)
     app.add_handler(message_conv)
+    app.add_handler(review_conv)
     app.add_handler(CallbackQueryHandler(admin_decision, pattern=r"^adm_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_owner_decision, pattern=r"^own_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_sitter_decision, pattern=r"^sit_(ok|no):"))
