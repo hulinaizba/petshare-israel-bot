@@ -73,6 +73,11 @@ def whatsapp_link(phone):
     return f"https://wa.me/{digits}" if digits else ""
 
 
+def compute_client_fee(price, first_time):
+    """Сервисный сбор клиента; для первой аренды — 0 (промо)."""
+    return 0 if first_time else round(price * CLIENT_FEE)
+
+
 def main_menu_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🐾 Каталог животных", callback_data="catalog")],
@@ -185,15 +190,29 @@ def card_keyboard(category, index, total, animal_id):
     return InlineKeyboardMarkup(rows)
 
 
+WELCOME_TEXT = (
+    "🐾 <b>PetShare Israel</b>\n"
+    "<i>Животные, которые делают события незабываемыми</i>\n"
+    "━━━━━━━━━━━━━━━━━━\n\n"
+    "📸 Фотосессия с альпакой? Корги на дне рождения?\n"
+    "Хаски для рекламной съёмки? — всё здесь!\n\n"
+    "✨ <b>Для вас:</b>\n"
+    "🔹 Проверенные животные с документами\n"
+    "🔹 Сопровождение владельца и инструкции\n"
+    "🔹 Заявка за 2 минуты прямо в боте\n\n"
+    "💼 <b>Для владельцев питомцев:</b>\n"
+    "Ваш любимец может «работать» и приносить доход в дом —\n"
+    "от 45₪/час за фотосессии и праздники. Анкета — 3 минуты!\n\n"
+    "🎁 <b>АКЦИЯ:</b> новым клиентам первая аренда —\n"
+    "<b>без сервисного сбора 10%!</b>\n"
+    "━━━━━━━━━━━━━━━━━━"
+)
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (
-        "🐾 <b>PetShare Israel</b>\n\n"
-        "Аренда животных для фотосессий, праздников и хорошего настроения:\n"
-        "собаки, кошки, попугаи, кролики, альпаки и не только.\n\n"
-        "Все животные проверены, с документами и страховкой.\n"
-        "Выберите, с чего начнём:"
+    await update.message.reply_text(
+        WELCOME_TEXT, reply_markup=main_menu_keyboard(), parse_mode="HTML"
     )
-    await update.message.reply_text(text, reply_markup=main_menu_keyboard(), parse_mode="HTML")
 
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -400,16 +419,22 @@ async def request_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     animal = context.user_data["req_animal"]
     price = parse_price(animal.get("цена_событие"))
-    client_fee = round(price * CLIENT_FEE)
+    first_time = not sheets.client_has_requests(update.effective_user.id)
+    context.user_data["req_first_time"] = first_time
+    client_fee = compute_client_fee(price, first_time)
     total = price + client_fee
 
+    if first_time:
+        fee_line = "🎁 Сервисный сбор: <b>0₪</b> (акция для новых клиентов!)"
+    else:
+        fee_line = f"➕ Сервисный сбор ({int(CLIENT_FEE * 100)}%): {client_fee}₪"
     summary = (
         "Проверьте заявку:\n\n"
         f"🐾 Животное: <b>{animal.get('имя', '')}</b> ({animal.get('порода', '')})\n"
         f"📅 Дата: {context.user_data['req_date']}\n"
         f"📱 Телефон: {phone}\n\n"
         f"💰 Аренда: {price}₪\n"
-        f"➕ Сервисный сбор ({int(CLIENT_FEE * 100)}%): {client_fee}₪\n"
+        f"{fee_line}\n"
         f"<b>Итого: {total}₪</b>\n\n"
         "Оплата — после подтверждения владельцем."
     )
@@ -437,7 +462,8 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     animal = context.user_data["req_animal"]
     user = update.effective_user
     price = parse_price(animal.get("цена_событие"))
-    client_fee = round(price * CLIENT_FEE)
+    first_time = context.user_data.get("req_first_time", False)
+    client_fee = compute_client_fee(price, first_time)
     owner_commission = round(price * OWNER_COMMISSION)
     platform_income = client_fee + owner_commission
 
@@ -453,7 +479,7 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         animal.get("имя", ""),
         context.user_data["req_date"],
         "новая",
-        "",
+        "промо: первая аренда без сбора" if first_time else "",
         price,
         client_fee,
         owner_commission,
@@ -478,7 +504,8 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👨‍💼 Владелец: {owner.get('имя', '—')}, {owner.get('телефон', '—')}\n"
         f"💬 WhatsApp: {owner.get('whatsapp', '—')}\n\n"
         f"💰 Аренда: {price}₪\n"
-        f"➕ Сбор с клиента (10%): {client_fee}₪\n"
+        f"➕ Сбор с клиента (10%): {client_fee}₪"
+        + (" 🎁 промо\n" if first_time else "\n") +
         f"➖ Комиссия владельца (20%): {owner_commission}₪\n"
         f"<b>Доход платформы: {platform_income}₪</b>"
     )
