@@ -180,11 +180,3 @@ def get_request(req_id):
 def update_request_status(req_id, status):
     """Меняет статус заявки в листе 'Заявки'. Возвращает True при успехе."""
     return _update_fields(config.SHEET_REQUESTS, req_id, {"статус": status})
-
-
-def client_has_requests(tg_id):
-    """Есть ли у клиента прошлые заявки (для промо «первая аренда без сбора»)."""
-    for r in _get_records(config.SHEET_REQUESTS):
-        if str(r.get("клиент_tg_id", "")).strip() == str(tg_id):
-            return True
-    return False

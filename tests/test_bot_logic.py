@@ -58,21 +58,12 @@ def test_parse_price():
     assert bot.parse_price(None) == 0
 
 
-def test_client_fee_regular():
-    assert bot.compute_client_fee(250, first_time=False) == 25
-
-
-def test_client_fee_promo_first_time():
-    assert bot.compute_client_fee(250, first_time=True) == 0
+def test_client_fee():
+    assert bot.compute_client_fee(250) == 25
 
 
 def test_owner_commission_rate():
     assert round(250 * bot.OWNER_COMMISSION) == 50
-
-
-def test_client_has_requests():
-    assert sheets.client_has_requests(111) is True
-    assert sheets.client_has_requests(999) is False
 
 
 # ---------- WhatsApp ----------
@@ -149,6 +140,6 @@ def test_format_card_no_accompaniment_for_safe():
 
 # ---------- Приветствие ----------
 
-def test_welcome_mentions_promo_and_owners():
-    assert "без сервисного сбора" in bot.WELCOME_TEXT
+def test_welcome_mentions_owners():
     assert "Для владельцев" in bot.WELCOME_TEXT
+    assert "АКЦИЯ" not in bot.WELCOME_TEXT
