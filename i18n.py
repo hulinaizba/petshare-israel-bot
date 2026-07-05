@@ -22,26 +22,48 @@ T = {
     # Первое знакомство: человек ещё не выбрал язык, поэтому текст на всех трёх
     "choose_lang_first": {
         "ru": (
-            "🐾 <b>PetShare Israel</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-            "🇷🇺 Добро пожаловать! Выберите язык интерфейса:\n\n"
-            "🇬🇧 Welcome! Choose your interface language:\n\n"
-            "🇮🇱 !ברוכים הבאים! בחרו את שפת הממשק"
+            "╔═══════════════════╗\n"
+            "   🐶  🐱  🦜  🐰  🦙  🐴\n"
+            "   ✨ <b>P E T S H A R E</b> ✨\n"
+            "   🇮🇱 <b>I S R A E L</b> 🇮🇱\n"
+            "   🐾 ─────────────── 🐾\n"
+            "   <i>walk • play • love</i>\n"
+            "╚═══════════════════╝\n\n"
+            "🇮🇱 1️⃣ ?באיזו שפה נמשיך\n"
+            "🇷🇺 2️⃣ На каком языке продолжим?\n"
+            "🇬🇧 3️⃣ Which language shall we continue in?\n\n"
+            "👇 👇 👇"
         ),
         "en": (
-            "🐾 <b>PetShare Israel</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-            "🇷🇺 Добро пожаловать! Выберите язык интерфейса:\n\n"
-            "🇬🇧 Welcome! Choose your interface language:\n\n"
-            "🇮🇱 !ברוכים הבאים! בחרו את שפת הממשק"
+            "🇮🇱 1️⃣ ?באיזו שפה נמשיך\n"
+            "🇷🇺 2️⃣ На каком языке продолжим?\n"
+            "🇬🇧 3️⃣ Which language shall we continue in?"
         ),
         "he": (
-            "🐾 <b>PetShare Israel</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-            "🇷🇺 Добро пожаловать! Выберите язык интерфейса:\n\n"
-            "🇬🇧 Welcome! Choose your interface language:\n\n"
-            "🇮🇱 !ברוכים הבאים! בחרו את שפת הממשק"
+            "🇮🇱 1️⃣ ?באיזו שפה נמשיך\n"
+            "🇷🇺 2️⃣ На каком языке продолжим?\n"
+            "🇬🇧 3️⃣ Which language shall we continue in?"
         ),
+    },
+    "use_buttons": {
+        "ru": "☝️ Пожалуйста, нажмите одну из кнопок выше 🙂",
+        "en": "☝️ Please tap one of the buttons above 🙂",
+        "he": "☝️ אנא לחצו על אחד הכפתורים למעלה 🙂",
+    },
+    "fallback_msg": {
+        "ru": "🤔 Я не понял сообщение. Вот главное меню:",
+        "en": "🤔 I didn't understand that. Here is the main menu:",
+        "he": "🤔 לא הבנתי את ההודעה. הנה התפריט הראשי:",
+    },
+    "nothing_to_cancel": {
+        "ru": "Сейчас нечего отменять 🙂 Вот меню:",
+        "en": "Nothing to cancel right now 🙂 Here is the menu:",
+        "he": "אין מה לבטל כרגע 🙂 הנה התפריט:",
+    },
+    "cant_self": {
+        "ru": "Нельзя предложить знакомство собственному питомцу 😄 Выберите другую анкету!",
+        "en": "You can't propose a meeting to your own pet 😄 Choose another profile!",
+        "he": "אי אפשר להציע היכרות לחיית המחמד של עצמכם 😄 בחרו פרופיל אחר!",
     },
     "lang_set": {
         "ru": "✅ Язык переключён на русский.",

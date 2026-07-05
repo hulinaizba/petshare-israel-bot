@@ -116,10 +116,18 @@ def compute_client_fee(price):
     return round(price * CLIENT_FEE)
 
 
+# Порядок выбора языка при знакомстве: иврит → русский → английский
+LANG_ORDER = [
+    ("he", "1️⃣ 🇮🇱 עברית"),
+    ("ru", "2️⃣ 🇷🇺 Русский"),
+    ("en", "3️⃣ 🇬🇧 English"),
+]
+
+
 def language_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(label, callback_data=f"lang_set:{code}")]
-        for code, label in LANGS.items()
+        for code, label in LANG_ORDER
     ])
 
 
@@ -332,6 +340,11 @@ def card_keyboard(category, index, total, animal_id, lang):
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "lang" not in context.user_data:
+        # Крупные анимированные эмодзи — «живое» первое касание
+        try:
+            await update.message.reply_text("🐶")
+        except Exception:
+            pass
         await update.message.reply_text(
             t("choose_lang_first", "ru"),
             reply_markup=language_keyboard(),
@@ -541,6 +554,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         if not target:
             await query.message.reply_text(t("frd_empty", lang))
+            return
+        if str(my_profile.get("id", "")).strip() == str(target.get("id", "")).strip():
+            await query.message.reply_text(t("cant_self", lang))
             return
 
         # Сбор берём, если хотя бы одна сторона ищет вязку
@@ -1882,6 +1898,37 @@ async def admin_match_decision(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.exception("Не удалось уведомить участников знакомства %s", match_id)
 
 
+async def use_buttons_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Пользователь написал текст там, где ждём нажатие кнопки."""
+    await update.message.reply_text(t("use_buttons", L(context)))
+    # состояние не меняем — остаёмся на том же шаге
+
+
+async def global_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/cancel вне анкет — показываем меню."""
+    lang = L(context)
+    await update.message.reply_text(
+        t("nothing_to_cancel", lang),
+        reply_markup=main_menu_keyboard(lang),
+    )
+
+
+async def fallback_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Любое сообщение, которое не поймал ни один сценарий."""
+    if "lang" not in context.user_data:
+        await update.message.reply_text(
+            t("choose_lang_first", "ru"),
+            reply_markup=language_keyboard(),
+            parse_mode="HTML",
+        )
+        return
+    lang = L(context)
+    await update.message.reply_text(
+        t("fallback_msg", lang),
+        reply_markup=main_menu_keyboard(lang),
+    )
+
+
 async def on_error(update, context):
     logger.exception("Ошибка при обработке апдейта", exc_info=context.error)
 
@@ -1920,9 +1967,13 @@ def main():
             REQ_PHONE: [MessageHandler(
                 (filters.TEXT & ~filters.COMMAND) | filters.CONTACT, request_phone
             )],
-            REQ_CONFIRM: [CallbackQueryHandler(request_confirm, pattern=r"^req_(confirm|cancel)$")],
+            REQ_CONFIRM: [
+                CallbackQueryHandler(request_confirm, pattern=r"^req_(confirm|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
         },
         fallbacks=[CommandHandler("cancel", request_cancel)],
+        conversation_timeout=1800,
     )
 
     owner_conv = ConversationHandler(
@@ -1935,19 +1986,29 @@ def main():
             OWN_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_phone)],
             OWN_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_city)],
             PET_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_name)],
-            PET_CATEGORY: [CallbackQueryHandler(pet_category, pattern=r"^pc:")],
+            PET_CATEGORY: [
+                CallbackQueryHandler(pet_category, pattern=r"^pc:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
             PET_CATEGORY_CUSTOM: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_category_custom)],
             PET_BREED: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_breed)],
             PET_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_age)],
             PET_TEMPERAMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_temperament)],
             PET_SKILLS: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_skills)],
-            PET_KIDS: [CallbackQueryHandler(pet_kids, pattern=r"^kids:")],
+            PET_KIDS: [
+                CallbackQueryHandler(pet_kids, pattern=r"^kids:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
             PET_PRICE_HOUR: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_price_hour)],
             PET_PRICE_EVENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, pet_price_event)],
             PET_PHOTO: [MessageHandler(filters.PHOTO | (filters.TEXT & ~filters.COMMAND), pet_photo)],
-            PET_CONFIRM: [CallbackQueryHandler(pet_confirm, pattern=r"^pet_(send|cancel)$")],
+            PET_CONFIRM: [
+                CallbackQueryHandler(pet_confirm, pattern=r"^pet_(send|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
         },
         fallbacks=[CommandHandler("cancel", owner_cancel)],
+        conversation_timeout=1800,
     )
 
     sitter_conv = ConversationHandler(
@@ -1960,9 +2021,13 @@ def main():
             SIT_EXP: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_exp)],
             SIT_COND: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_cond)],
             SIT_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, sitter_price)],
-            SIT_CONFIRM: [CallbackQueryHandler(sitter_confirm, pattern=r"^sit_(send|cancel)$")],
+            SIT_CONFIRM: [
+                CallbackQueryHandler(sitter_confirm, pattern=r"^sit_(send|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
         },
         fallbacks=[CommandHandler("cancel", sitter_cancel)],
+        conversation_timeout=1800,
     )
 
     boarding_conv = ConversationHandler(
@@ -1976,9 +2041,13 @@ def main():
             BRD_PHONE: [MessageHandler(
                 (filters.TEXT & ~filters.COMMAND) | filters.CONTACT, boarding_phone
             )],
-            BRD_CONFIRM: [CallbackQueryHandler(boarding_confirm, pattern=r"^brd_(confirm|cancel)$")],
+            BRD_CONFIRM: [
+                CallbackQueryHandler(boarding_confirm, pattern=r"^brd_(confirm|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
         },
         fallbacks=[CommandHandler("cancel", boarding_cancel)],
+        conversation_timeout=1800,
     )
 
     friend_conv = ConversationHandler(
@@ -1989,15 +2058,25 @@ def main():
             FRD_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_city)],
             FRD_PETNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_petname)],
             FRD_BREED: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_breed)],
-            FRD_SEX: [CallbackQueryHandler(friend_sex, pattern=r"^fsex:")],
+            FRD_SEX: [
+                CallbackQueryHandler(friend_sex, pattern=r"^fsex:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
             FRD_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_age)],
-            FRD_GOAL: [CallbackQueryHandler(friend_goal, pattern=r"^fgoal:")],
+            FRD_GOAL: [
+                CallbackQueryHandler(friend_goal, pattern=r"^fgoal:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
             FRD_DOCS: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_docs)],
             FRD_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_desc)],
             FRD_PHOTO: [MessageHandler(filters.PHOTO | (filters.TEXT & ~filters.COMMAND), friend_photo)],
-            FRD_CONFIRM: [CallbackQueryHandler(friend_confirm, pattern=r"^frd_(send|cancel)$")],
+            FRD_CONFIRM: [
+                CallbackQueryHandler(friend_confirm, pattern=r"^frd_(send|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
         },
         fallbacks=[CommandHandler("cancel", friend_cancel)],
+        conversation_timeout=1800,
     )
 
     app.add_handler(CommandHandler("start", cmd_start))
@@ -2021,6 +2100,9 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_friend_decision, pattern=r"^frd_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_match_decision, pattern=r"^mtc_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_callback))
+    # Страховка: /cancel вне анкет и любое непонятое сообщение — всегда есть ответ
+    app.add_handler(CommandHandler("cancel", global_cancel))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, fallback_message))
     app.add_error_handler(on_error)
     logger.info("Бот PetShare Israel запущен")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
