@@ -230,3 +230,71 @@ def get_boarding(brd_id):
 
 def update_boarding_status(brd_id, status):
     return _update_fields(config.SHEET_BOARDING, brd_id, {"статус": status})
+
+
+# ---------- Знакомства питомцев ----------
+
+def get_friend_profiles(goal=None):
+    """Одобренные анкеты; goal: 'дружба' | 'вязка' | None (все).
+
+    Анкеты с целью «обе» попадают в обе выборки.
+    """
+    profiles = _get_records(config.SHEET_FRIENDS)
+    result = []
+    for p in profiles:
+        if str(p.get("статус", "")).strip() != "проверен":
+            continue
+        p_goal = str(p.get("цель", "")).strip()
+        if goal and p_goal != goal and p_goal != "обе":
+            continue
+        result.append(p)
+    return result
+
+
+def get_friend_any(profile_id):
+    for p in _get_records(config.SHEET_FRIENDS):
+        if str(p.get("id", "")).strip() == profile_id:
+            return p
+    return None
+
+
+def get_friend_by_tg(tg_id):
+    """Одобренная анкета пользователя (для «предложить знакомство»)."""
+    for p in _get_records(config.SHEET_FRIENDS):
+        if (str(p.get("tg_id", "")).strip() == str(tg_id)
+                and str(p.get("статус", "")).strip() == "проверен"):
+            return p
+    return None
+
+
+def next_friend_id():
+    records = _get_records(config.SHEET_FRIENDS)
+    return f"FRD-{len(records) + 1:03d}"
+
+
+def add_friend(row):
+    _append_row(config.SHEET_FRIENDS, row)
+
+
+def update_friend_status(profile_id, status):
+    return _update_fields(config.SHEET_FRIENDS, profile_id, {"статус": status})
+
+
+def next_match_id():
+    records = _get_records(config.SHEET_MATCHES)
+    return f"MTC-{len(records) + 1:03d}"
+
+
+def add_match(row):
+    _append_row(config.SHEET_MATCHES, row)
+
+
+def get_match(match_id):
+    for m in _get_records(config.SHEET_MATCHES):
+        if str(m.get("id", "")).strip() == match_id:
+            return m
+    return None
+
+
+def update_match_status(match_id, status):
+    return _update_fields(config.SHEET_MATCHES, match_id, {"статус": status})

@@ -69,7 +69,20 @@ REQ_DATE, REQ_PHONE, REQ_CONFIRM = range(3)
 ) = range(30, 38)
 
 # Состояния заявки на передержку
-BRD_PET, BRD_DATES, BRD_CITY, BRD_NOTES, BRD_PHONE, BRD_CONFIRM = range(40, 46)
+BRD_PET, BRD_DATES, BRD_DAYS, BRD_CITY, BRD_NOTES, BRD_PHONE, BRD_CONFIRM = range(40, 47)
+
+# Состояния анкеты знакомств
+(
+    FRD_NAME, FRD_PHONE, FRD_CITY, FRD_PETNAME, FRD_BREED, FRD_SEX,
+    FRD_AGE, FRD_GOAL, FRD_DOCS, FRD_DESC, FRD_PHOTO, FRD_CONFIRM,
+) = range(50, 62)
+
+# Сервисный сбор за организацию вязки, ₪ (дружба — бесплатно)
+MATING_FEE = 50
+
+GOAL_KEYS = {"дружба": "goal_friend", "вязка": "goal_mate", "обе": "goal_both"}
+SEX_KEYS = {"М": "sex_male", "Ж": "sex_female"}
+SEX_ICONS = {"М": "♂", "Ж": "♀"}
 
 
 def L(context):
@@ -116,9 +129,39 @@ def main_menu_keyboard(lang):
         [InlineKeyboardButton(t("btn_filters", lang), callback_data="filters")],
         [InlineKeyboardButton(t("btn_owner", lang), callback_data="owner_start")],
         [InlineKeyboardButton(t("btn_boarding", lang), callback_data="board_menu")],
+        [InlineKeyboardButton(t("btn_friends", lang), callback_data="frd_menu")],
         [InlineKeyboardButton(t("btn_about", lang), callback_data="about")],
         [InlineKeyboardButton(t("btn_lang", lang), callback_data="lang")],
     ])
+
+
+def friends_menu_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_create_profile", lang), callback_data="frd_form")],
+        [InlineKeyboardButton(t("btn_browse_friends", lang), callback_data="frdcard:дружба:0")],
+        [InlineKeyboardButton(t("btn_browse_mating", lang), callback_data="frdcard:вязка:0")],
+        [InlineKeyboardButton(t("btn_menu", lang), callback_data="menu")],
+    ])
+
+
+def format_friend_card(profile, position, total, lang):
+    sex = str(profile.get("пол", "")).strip()
+    goal = str(profile.get("цель", "")).strip()
+    lines = [
+        f"🐾 <b>{profile.get('кличка', '')}</b> — {profile.get('вид_порода', '')}",
+        "",
+        f"{SEX_ICONS.get(sex, '')} {t('frd_card_sex', lang)}: "
+        f"{t(SEX_KEYS.get(sex, 'sex_male'), lang)}   |   "
+        f"{t('frd_card_age', lang)}: {profile.get('возраст', '')}",
+        f"📍 {profile.get('город', '')}",
+        f"🎯 {t('frd_card_goal', lang)}: {t(GOAL_KEYS.get(goal, 'goal_both'), lang)}",
+        f"📋 {t('frd_card_docs', lang)}: {profile.get('документы', '')}",
+    ]
+    desc = str(profile.get("описание", "")).strip()
+    if desc:
+        lines += ["", f"<i>{desc}</i>"]
+    lines += ["", t("card_pos", lang, pos=position, total=total)]
+    return "\n".join(lines)
 
 
 def board_menu_keyboard(lang):
@@ -322,6 +365,15 @@ async def cmd_boarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_friends(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    await update.message.reply_text(
+        t("frd_menu", lang, mating_fee=MATING_FEE),
+        reply_markup=friends_menu_keyboard(lang),
+        parse_mode="HTML",
+    )
+
+
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сброс кэша таблицы (только для администратора)."""
     if update.effective_user.id != config.ADMIN_CHAT_ID:
@@ -374,6 +426,118 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             t("board_menu", lang), reply_markup=board_menu_keyboard(lang), parse_mode="HTML"
         )
+        return
+
+    if data == "frd_menu":
+        await query.edit_message_text(
+            t("frd_menu", lang, mating_fee=MATING_FEE),
+            reply_markup=friends_menu_keyboard(lang),
+            parse_mode="HTML",
+        )
+        return
+
+    if data.startswith("frdcard:"):
+        _, goal, index_str = data.split(":", 2)
+        profiles = sheets.get_friend_profiles(goal)
+        if not profiles:
+            await query.edit_message_text(
+                t("frd_empty", lang), reply_markup=friends_menu_keyboard(lang)
+            )
+            return
+        index = int(index_str) % len(profiles)
+        profile = profiles[index]
+        total = len(profiles)
+        rows = []
+        if total > 1:
+            rows.append([
+                InlineKeyboardButton("◀️", callback_data=f"frdcard:{goal}:{(index - 1) % total}"),
+                InlineKeyboardButton(f"{index + 1}/{total}", callback_data="noop"),
+                InlineKeyboardButton("▶️", callback_data=f"frdcard:{goal}:{(index + 1) % total}"),
+            ])
+        rows.append([InlineKeyboardButton(
+            t("btn_propose", lang), callback_data=f"propose:{profile.get('id', '')}"
+        )])
+        rows.append([
+            InlineKeyboardButton(t("btn_friends", lang), callback_data="frd_menu"),
+            InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
+        ])
+        await query.edit_message_text(
+            format_friend_card(profile, index + 1, total, lang),
+            reply_markup=InlineKeyboardMarkup(rows),
+            parse_mode="HTML",
+        )
+        return
+
+    if data.startswith("propose:"):
+        target_id = data.split(":", 1)[1]
+        target = sheets.get_friend_any(target_id)
+        my_profile = sheets.get_friend_by_tg(update.effective_user.id)
+        if not my_profile:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(t("btn_create_profile", lang), callback_data="frd_form")],
+                [InlineKeyboardButton(t("btn_friends", lang), callback_data="frd_menu")],
+            ])
+            await query.message.reply_text(t("frd_need_profile", lang), reply_markup=keyboard)
+            return
+        if not target:
+            await query.message.reply_text(t("frd_empty", lang))
+            return
+
+        # Сбор берём, если хотя бы одна сторона ищет вязку
+        goals = {str(my_profile.get("цель", "")).strip(), str(target.get("цель", "")).strip()}
+        is_mating = bool(goals & {"вязка", "обе"})
+        fee = MATING_FEE if is_mating else 0
+
+        match_id = sheets.next_match_id()
+        sheets.add_match([
+            match_id,
+            datetime.now().strftime("%d.%m.%Y %H:%M"),
+            my_profile.get("id", ""),
+            my_profile.get("кличка", ""),
+            update.effective_user.id,
+            target.get("id", ""),
+            target.get("кличка", ""),
+            "новая",
+            fee,
+        ])
+        text = t("propose_sent", lang, id=match_id)
+        if fee:
+            text += "\n\n" + t("mating_fee_note", lang, fee=fee)
+        await query.message.reply_text(text, parse_mode="HTML")
+
+        admin_text = (
+            f"🔔 <b>Заявка на знакомство {match_id}</b>\n\n"
+            f"🐾 Кто: {my_profile.get('кличка', '')} ({my_profile.get('вид_порода', '')}, "
+            f"{my_profile.get('пол', '')}, {my_profile.get('id', '')})\n"
+            f"   Владелец: {my_profile.get('владелец_имя', '')}, {my_profile.get('телефон', '')}\n"
+            f"   📋 {my_profile.get('документы', '')}\n\n"
+            f"💘 К кому: {target.get('кличка', '')} ({target.get('вид_порода', '')}, "
+            f"{target.get('пол', '')}, {target.get('id', '')})\n"
+            f"   Владелец: {target.get('владелец_имя', '')}, {target.get('телефон', '')}\n"
+            f"   📋 {target.get('документы', '')}\n\n"
+            + (f"💳 Сбор за вязку: {fee}₪\n" if fee else "🤝 Дружеское знакомство (без сбора)\n")
+            + "\n⚠️ Проверьте документы и совместимость (порода, возраст)!"
+        )
+        admin_rows = [[
+            InlineKeyboardButton("✅ Одобрить", callback_data=f"mtc_ok:{match_id}"),
+            InlineKeyboardButton("❌ Отклонить", callback_data=f"mtc_no:{match_id}"),
+        ]]
+        wa1 = whatsapp_link(my_profile.get("телефон", ""))
+        wa2 = whatsapp_link(target.get("телефон", ""))
+        wa_row = []
+        if wa1:
+            wa_row.append(InlineKeyboardButton("💬 WA инициатора", url=wa1))
+        if wa2:
+            wa_row.append(InlineKeyboardButton("💬 WA второго", url=wa2))
+        if wa_row:
+            admin_rows.append(wa_row)
+        try:
+            await context.bot.send_message(
+                config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(admin_rows),
+            )
+        except Exception:
+            logger.exception("Не удалось уведомить администратора о знакомстве")
         return
 
     if data.startswith("sitcard:"):
@@ -1167,6 +1331,12 @@ async def boarding_pet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def boarding_dates(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["brd_flow"]["dates"] = update.message.text.strip()
+    await update.message.reply_text(t("brd_ask_days", L(context)))
+    return BRD_DAYS
+
+
+async def boarding_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["brd_flow"]["days"] = parse_price(update.message.text)
     await update.message.reply_text(t("brd_ask_city", L(context)))
     return BRD_CITY
 
@@ -1205,11 +1375,26 @@ async def boarding_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pet=flow["pet"], dates=flow["dates"], city=flow["city"],
         notes=flow["notes"], phone=flow["phone"], sitter_line=sitter_line,
     )
+
+    # Расчёт стоимости и сбора, если выбран конкретный ситтер
+    sitter = sheets.get_sitter_any(flow.get("sitter_id", "")) or {}
+    rate = parse_price(sitter.get("цена_сутки"))
+    days = flow.get("days", 0)
+    if rate and days:
+        cost = rate * days
+        fee = compute_client_fee(cost)
+        summary += "\n\n" + t(
+            "brd_cost_block", lang,
+            days=days, rate=rate, cost=cost, fee=fee, total=cost + fee,
+        )
+    else:
+        summary += "\n\n" + t("brd_cost_later", lang)
+
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(t("btn_req_send", lang), callback_data="brd_confirm")],
         [InlineKeyboardButton(t("btn_req_cancel", lang), callback_data="brd_cancel")],
     ])
-    await update.message.reply_text(summary, reply_markup=keyboard)
+    await update.message.reply_text(summary, reply_markup=keyboard, parse_mode="HTML")
     await update.message.reply_text("👆", reply_markup=ReplyKeyboardRemove())
     return BRD_CONFIRM
 
@@ -1228,6 +1413,15 @@ async def boarding_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     brd_id = sheets.next_boarding_id()
     client_name = user.full_name + (f" (@{user.username})" if user.username else "")
+
+    sitter = sheets.get_sitter_any(flow.get("sitter_id", "")) or {}
+    rate = parse_price(sitter.get("цена_сутки"))
+    days = flow.get("days", 0)
+    cost = rate * days if rate and days else 0
+    client_fee = compute_client_fee(cost)
+    sitter_commission = round(cost * OWNER_COMMISSION)
+    platform_income = client_fee + sitter_commission
+
     sheets.add_boarding([
         brd_id,
         datetime.now().strftime("%d.%m.%Y %H:%M"),
@@ -1241,15 +1435,29 @@ async def boarding_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         flow.get("sitter_id", ""),
         "новая",
         "",
+        days,
+        rate,
+        cost,
+        client_fee,
+        sitter_commission,
+        platform_income,
     ])
     await query.edit_message_text(t("brd_sent", lang, id=brd_id), parse_mode="HTML")
 
-    sitter = sheets.get_sitter_any(flow.get("sitter_id", "")) or {}
     sitter_info = (
         f"🤝 Ситтер: {sitter.get('имя', '')}, {sitter.get('телефон', '')} "
         f"({sitter.get('цена_сутки', '')}₪/сутки)\n"
         if sitter else "🤝 Ситтер не выбран — подберите вручную\n"
     )
+    if cost:
+        money_info = (
+            f"\n💰 {days} сут. × {rate}₪ = {cost}₪\n"
+            f"➕ Сбор с клиента (10%): {client_fee}₪\n"
+            f"➖ Комиссия ситтера (20%): {sitter_commission}₪\n"
+            f"<b>Доход платформы: {platform_income}₪</b>\n"
+        )
+    else:
+        money_info = f"\n💰 Суток: {days or '—'}. Стоимость посчитайте после подбора ситтера.\n"
     admin_text = (
         f"🔔 <b>Новая заявка на передержку {brd_id}</b>\n\n"
         f"👤 Владелец: {client_name}\n"
@@ -1258,7 +1466,7 @@ async def boarding_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📅 Даты: {flow['dates']}\n"
         f"📍 Город: {flow['city']}\n"
         f"📝 Особенности: {flow['notes']}\n"
-        + sitter_info
+        + sitter_info + money_info
     )
     admin_rows = [[
         InlineKeyboardButton("✅ Подтвердить", callback_data=f"brd_ok:{brd_id}"),
@@ -1340,6 +1548,280 @@ async def admin_boarding_decision(update: Update, context: ContextTypes.DEFAULT_
         logger.exception("Не удалось уведомить клиента по передержке %s", brd_id)
 
 
+# ---------- Анкета знакомств ----------
+
+async def friend_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["frd_flow"] = {}
+    await query.message.reply_text(t("frd_intro", L(context)), parse_mode="HTML")
+    return FRD_NAME
+
+
+async def friend_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["frd_flow"]["name"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_phone", L(context)))
+    return FRD_PHONE
+
+
+async def friend_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["frd_flow"]["phone"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_city", L(context)))
+    return FRD_CITY
+
+
+async def friend_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["frd_flow"]["city"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_petname", L(context)))
+    return FRD_PETNAME
+
+
+async def friend_petname(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["frd_flow"]["pet_name"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_breed", L(context)))
+    return FRD_BREED
+
+
+async def friend_breed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    context.user_data["frd_flow"]["breed"] = update.message.text.strip()
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(t("btn_male", lang), callback_data="fsex:М"),
+        InlineKeyboardButton(t("btn_female", lang), callback_data="fsex:Ж"),
+    ]])
+    await update.message.reply_text(t("frd_ask_sex", lang), reply_markup=keyboard)
+    return FRD_SEX
+
+
+async def friend_sex(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["frd_flow"]["sex"] = query.data.split(":", 1)[1]
+    await query.message.reply_text(t("own_ask_age", L(context)))
+    return FRD_AGE
+
+
+async def friend_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    context.user_data["frd_flow"]["age"] = update.message.text.strip()
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_goal_friend", lang), callback_data="fgoal:дружба")],
+        [InlineKeyboardButton(t("btn_goal_mate", lang), callback_data="fgoal:вязка")],
+        [InlineKeyboardButton(t("btn_goal_both", lang), callback_data="fgoal:обе")],
+    ])
+    await update.message.reply_text(t("frd_ask_goal", lang), reply_markup=keyboard)
+    return FRD_GOAL
+
+
+async def friend_goal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["frd_flow"]["goal"] = query.data.split(":", 1)[1]
+    await query.message.reply_text(t("frd_ask_docs", L(context)), parse_mode="HTML")
+    return FRD_DOCS
+
+
+async def friend_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["frd_flow"]["docs"] = update.message.text.strip()
+    await update.message.reply_text(t("frd_ask_desc", L(context)))
+    return FRD_DESC
+
+
+async def friend_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["frd_flow"]["desc"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_photo", L(context)))
+    return FRD_PHOTO
+
+
+async def friend_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    flow = context.user_data["frd_flow"]
+    flow["photo"] = update.message.photo[-1].file_id if update.message.photo else ""
+
+    summary = t(
+        "frd_summary", lang,
+        name=flow["name"], phone=flow["phone"], city=flow["city"],
+        pet_name=flow["pet_name"], breed=flow["breed"],
+        sex_icon=SEX_ICONS.get(flow["sex"], ""), sex=t(SEX_KEYS[flow["sex"]], lang),
+        age=flow["age"], goal=t(GOAL_KEYS[flow["goal"]], lang),
+        docs=flow["docs"], desc=flow["desc"],
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_own_send", lang), callback_data="frd_send")],
+        [InlineKeyboardButton(t("btn_own_cancel", lang), callback_data="frd_cancel")],
+    ])
+    if flow["photo"]:
+        await update.message.reply_photo(flow["photo"], caption=summary, reply_markup=keyboard)
+    else:
+        await update.message.reply_text(summary, reply_markup=keyboard)
+    return FRD_CONFIRM
+
+
+async def friend_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+
+    if query.data == "frd_cancel":
+        await query.message.reply_text(t("own_cancelled", lang))
+        context.user_data.pop("frd_flow", None)
+        return ConversationHandler.END
+
+    flow = context.user_data["frd_flow"]
+    user = update.effective_user
+    profile_id = sheets.next_friend_id()
+    sheets.add_friend([
+        profile_id,
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        flow["name"], flow["phone"], user.id, flow["city"],
+        flow["pet_name"], flow["breed"], flow["sex"], flow["age"],
+        flow["goal"], flow["docs"], flow["desc"], flow["photo"],
+        "на проверке",
+    ])
+    await query.message.reply_text(t("own_sent", lang))
+
+    admin_text = (
+        "🔔 <b>Новая анкета знакомств</b>\n\n"
+        f"👤 {flow['name']}, {flow['phone']}, {flow['city']} ({profile_id})\n\n"
+        f"🐾 {flow['pet_name']} — {flow['breed']}\n"
+        f"{SEX_ICONS.get(flow['sex'], '')} Пол: {flow['sex']}   |   Возраст: {flow['age']}\n"
+        f"🎯 Цель: {flow['goal']}\n"
+        f"📋 Документы: {flow['docs']}\n"
+        f"📝 {flow['desc']}\n\n"
+        "⚠️ Для вязки проверьте родословную и ветсправки!"
+    )
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Одобрить", callback_data=f"frd_ok:{profile_id}"),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f"frd_no:{profile_id}"),
+    ]])
+    try:
+        if flow["photo"]:
+            await context.bot.send_photo(
+                config.ADMIN_CHAT_ID, flow["photo"], caption=admin_text,
+                parse_mode="HTML", reply_markup=keyboard,
+            )
+        else:
+            await context.bot.send_message(
+                config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML", reply_markup=keyboard,
+            )
+    except Exception:
+        logger.exception("Не удалось уведомить администратора об анкете знакомств")
+
+    context.user_data.pop("frd_flow", None)
+    return ConversationHandler.END
+
+
+async def friend_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("frd_flow", None)
+    await update.message.reply_text(
+        t("own_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
+async def admin_friend_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор одобряет/отклоняет анкету знакомств."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, profile_id = query.data.split(":", 1)
+    profile = sheets.get_friend_any(profile_id)
+    if not profile:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "frd_ok":
+        sheets.update_friend_status(profile_id, "проверен")
+        badge = "✅ ОДОБРЕНО"
+    else:
+        sheets.update_friend_status(profile_id, "отклонена")
+        badge = "❌ ОТКЛОНЕНО"
+
+    if query.message.photo:
+        await query.edit_message_caption(
+            caption=query.message.caption_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+        )
+    else:
+        await query.edit_message_text(
+            query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+        )
+
+    owner_tg = str(profile.get("tg_id", "")).strip()
+    if not owner_tg.isdigit():
+        return
+    own_lang = user_lang(context, owner_tg)
+    try:
+        key = "frd_approved" if action == "frd_ok" else "frd_declined"
+        await context.bot.send_message(
+            int(owner_tg), t(key, own_lang, name=profile.get("кличка", ""))
+        )
+    except Exception:
+        logger.exception("Не удалось уведомить владельца анкеты %s", owner_tg)
+
+
+async def admin_match_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор одобряет/отклоняет заявку на знакомство."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, match_id = query.data.split(":", 1)
+    match = sheets.get_match(match_id)
+    if not match:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "mtc_ok":
+        sheets.update_match_status(match_id, "одобрена")
+        badge = "✅ ОДОБРЕНО"
+    else:
+        sheets.update_match_status(match_id, "отклонена")
+        badge = "❌ ОТКЛОНЕНО"
+    await query.edit_message_text(
+        query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+    )
+
+    who = sheets.get_friend_any(str(match.get("кто_id", "")).strip()) or {}
+    target = sheets.get_friend_any(str(match.get("кого_id", "")).strip()) or {}
+
+    async def notify(profile, other):
+        tg = str(profile.get("tg_id", "")).strip()
+        if not tg.isdigit():
+            return
+        lng = user_lang(context, tg)
+        if action == "mtc_ok":
+            keyboard = None
+            wa = whatsapp_link(other.get("телефон", ""))
+            if wa:
+                keyboard = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton(t("btn_wa_owner", lng), url=wa)]]
+                )
+            await context.bot.send_message(
+                int(tg),
+                t("mtc_confirmed", lng, id=match_id,
+                  pet1=profile.get("кличка", ""), pet2=other.get("кличка", "")),
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        else:
+            await context.bot.send_message(
+                int(tg), t("mtc_declined", lng, id=match_id), parse_mode="HTML"
+            )
+
+    try:
+        await notify(who, target)
+        # второму владельцу сообщаем только при одобрении
+        if action == "mtc_ok":
+            await notify(target, who)
+    except Exception:
+        logger.exception("Не удалось уведомить участников знакомства %s", match_id)
+
+
 async def on_error(update, context):
     logger.exception("Ошибка при обработке апдейта", exc_info=context.error)
 
@@ -1352,6 +1834,7 @@ async def post_init(app):
         ("filters", "🔍 Фильтры / Filters / מסננים"),
         ("owner", "💼 Сдать питомца / List your pet / להשכיר"),
         ("boarding", "🏡 Передержка / Boarding / פנסיון"),
+        ("friends", "💞 Знакомства / Matchmaking / היכרויות"),
         ("language", "🌐 Язык / Language / שפה"),
         ("help", "ℹ️ Как это работает / How it works / איך זה עובד"),
         ("cancel", "❌ Отмена / Cancel / ביטול"),
@@ -1427,6 +1910,7 @@ def main():
         states={
             BRD_PET: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_pet)],
             BRD_DATES: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_dates)],
+            BRD_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_days)],
             BRD_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_city)],
             BRD_NOTES: [MessageHandler(filters.TEXT & ~filters.COMMAND, boarding_notes)],
             BRD_PHONE: [MessageHandler(
@@ -1437,10 +1921,30 @@ def main():
         fallbacks=[CommandHandler("cancel", boarding_cancel)],
     )
 
+    friend_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(friend_start, pattern=r"^frd_form$")],
+        states={
+            FRD_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_name)],
+            FRD_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_phone)],
+            FRD_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_city)],
+            FRD_PETNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_petname)],
+            FRD_BREED: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_breed)],
+            FRD_SEX: [CallbackQueryHandler(friend_sex, pattern=r"^fsex:")],
+            FRD_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_age)],
+            FRD_GOAL: [CallbackQueryHandler(friend_goal, pattern=r"^fgoal:")],
+            FRD_DOCS: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_docs)],
+            FRD_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, friend_desc)],
+            FRD_PHOTO: [MessageHandler(filters.PHOTO | (filters.TEXT & ~filters.COMMAND), friend_photo)],
+            FRD_CONFIRM: [CallbackQueryHandler(friend_confirm, pattern=r"^frd_(send|cancel)$")],
+        },
+        fallbacks=[CommandHandler("cancel", friend_cancel)],
+    )
+
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("catalog", cmd_catalog))
     app.add_handler(CommandHandler("filters", cmd_filters))
     app.add_handler(CommandHandler("boarding", cmd_boarding))
+    app.add_handler(CommandHandler("friends", cmd_friends))
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
@@ -1448,10 +1952,13 @@ def main():
     app.add_handler(owner_conv)
     app.add_handler(sitter_conv)
     app.add_handler(boarding_conv)
+    app.add_handler(friend_conv)
     app.add_handler(CallbackQueryHandler(admin_decision, pattern=r"^adm_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_owner_decision, pattern=r"^own_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_sitter_decision, pattern=r"^sit_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_boarding_decision, pattern=r"^brd_(ok|no):"))
+    app.add_handler(CallbackQueryHandler(admin_friend_decision, pattern=r"^frd_(ok|no):"))
+    app.add_handler(CallbackQueryHandler(admin_match_decision, pattern=r"^mtc_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_error_handler(on_error)
     logger.info("Бот PetShare Israel запущен")

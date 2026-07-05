@@ -744,6 +744,187 @@ T = {
         "en": "😔 Unfortunately, boarding request <b>{id}</b> was declined — no sitters available for these dates.\n\nTry other dates 🐾",
         "he": "😔 לצערנו בקשת הפנסיון <b>{id}</b> נדחתה — אין פט-סיטרים פנויים בתאריכים אלה.\n\nנסו תאריכים אחרים 🐾",
     },
+    "brd_ask_days": {
+        "ru": "Сколько суток нужна передержка? (только число)",
+        "en": "How many days of boarding do you need? (number only)",
+        "he": "כמה ימי פנסיון צריך? (מספר בלבד)",
+    },
+    "brd_cost_block": {
+        "ru": "💰 {days} сут. × {rate}₪ = {cost}₪\n➕ Сервисный сбор (10%): {fee}₪\n<b>Итого: {total}₪</b>",
+        "en": "💰 {days} days × {rate}₪ = {cost}₪\n➕ Service fee (10%): {fee}₪\n<b>Total: {total}₪</b>",
+        "he": "💰 {days} ימים × {rate}₪ = {cost}₪\n➕ עמלת שירות (10%): {fee}₪\n<b>סה\"כ: {total}₪</b>",
+    },
+    "brd_cost_later": {
+        "ru": "💰 Стоимость рассчитаем после подбора ситтера (+10% сервисный сбор)",
+        "en": "💰 The cost will be calculated after we match a sitter (+10% service fee)",
+        "he": "💰 העלות תחושב לאחר התאמת פט-סיטר (+10% עמלת שירות)",
+    },
+
+    # ---------- Знакомства питомцев ----------
+    "btn_friends": {"ru": "💞 Знакомства питомцев", "en": "💞 Pet matchmaking", "he": "💞 היכרויות לחיות מחמד"},
+    "frd_menu": {
+        "ru": (
+            "💞 <b>Знакомства питомцев</b>\n\n"
+            "🤝 Найдите питомцу друга для совместных прогулок\n"
+            "💞 Или пару для вязки — с проверенными документами\n\n"
+            "Правило простое: сначала создайте анкету своего питомца,\n"
+            "после проверки вы сможете предлагать знакомства.\n\n"
+            "💳 Организация вязки — сервисный сбор {mating_fee}₪.\n"
+            "Дружеские знакомства — бесплатно!"
+        ),
+        "en": (
+            "💞 <b>Pet matchmaking</b>\n\n"
+            "🤝 Find your pet a friend for walks together\n"
+            "💞 Or a mate for breeding — with verified documents\n\n"
+            "Simple rule: first create your pet's profile,\n"
+            "after verification you can propose meetings.\n\n"
+            "💳 Breeding arrangement — {mating_fee}₪ service fee.\n"
+            "Friendship meetings are free!"
+        ),
+        "he": (
+            "💞 <b>היכרויות לחיות מחמד</b>\n\n"
+            "🤝 מצאו לחיית המחמד חבר לטיולים משותפים\n"
+            "💞 או בן/בת זוג להרבעה — עם מסמכים מאומתים\n\n"
+            "הכלל פשוט: קודם צרו פרופיל לחיית המחמד שלכם,\n"
+            "לאחר האימות תוכלו להציע היכרויות.\n\n"
+            "💳 ארגון הרבעה — עמלת שירות {mating_fee}₪.\n"
+            "היכרויות חברות — בחינם!"
+        ),
+    },
+    "btn_create_profile": {"ru": "📝 Создать анкету питомца", "en": "📝 Create pet profile", "he": "📝 ליצור פרופיל לחיית המחמד"},
+    "btn_browse_friends": {"ru": "🤝 Ищут друзей", "en": "🤝 Looking for friends", "he": "🤝 מחפשים חברים"},
+    "btn_browse_mating": {"ru": "💞 Ищут пару (вязка)", "en": "💞 Looking for a mate", "he": "💞 מחפשים בני זוג"},
+    "frd_intro": {
+        "ru": (
+            "📝 <b>Анкета питомца для знакомств</b>\n\n"
+            "После проверки анкета попадёт в каталог, и вы сможете\n"
+            "предлагать знакомства другим питомцам.\n\n"
+            "Как вас зовут (владельца)?\n\nОтменить — /cancel"
+        ),
+        "en": (
+            "📝 <b>Pet profile for matchmaking</b>\n\n"
+            "After verification your profile will appear in the catalog,\n"
+            "and you will be able to propose meetings.\n\n"
+            "What is your (owner's) name?\n\nCancel — /cancel"
+        ),
+        "he": (
+            "📝 <b>פרופיל חיית מחמד להיכרויות</b>\n\n"
+            "לאחר האימות הפרופיל יופיע בקטלוג ותוכלו\n"
+            "להציע היכרויות לחיות מחמד אחרות.\n\n"
+            "איך קוראים לכם (הבעלים)?\n\nלביטול — /cancel"
+        ),
+    },
+    "frd_ask_sex": {"ru": "Пол питомца?", "en": "Your pet's sex?", "he": "מין חיית המחמד?"},
+    "btn_male": {"ru": "♂ Мальчик", "en": "♂ Male", "he": "♂ זכר"},
+    "btn_female": {"ru": "♀ Девочка", "en": "♀ Female", "he": "♀ נקבה"},
+    "frd_ask_goal": {"ru": "Что ищете?", "en": "What are you looking for?", "he": "מה אתם מחפשים?"},
+    "btn_goal_friend": {"ru": "🤝 Друга для прогулок", "en": "🤝 A friend for walks", "he": "🤝 חבר לטיולים"},
+    "btn_goal_mate": {"ru": "💞 Пару для вязки", "en": "💞 A mate for breeding", "he": "💞 בן/בת זוג להרבעה"},
+    "btn_goal_both": {"ru": "✨ И то, и другое", "en": "✨ Both", "he": "✨ גם וגם"},
+    "frd_ask_docs": {
+        "ru": "Документы питомца: прививки, ветпаспорт, родословная?\nНапример: <i>прививки есть, родословная есть</i>",
+        "en": "Your pet's documents: vaccinations, vet passport, pedigree?\nFor example: <i>vaccinated, has pedigree</i>",
+        "he": "מסמכי חיית המחמד: חיסונים, פנקס וטרינרי, ייחוס?\nלדוגמה: <i>מחוסן, יש ייחוס</i>",
+    },
+    "frd_ask_desc": {
+        "ru": "Пара слов о питомце: характер, привычки, что любит?",
+        "en": "A few words about your pet: character, habits, likes?",
+        "he": "כמה מילים על חיית המחמד: אופי, הרגלים, מה אוהב?",
+    },
+    "frd_summary": {
+        "ru": (
+            "Проверьте анкету:\n\n"
+            "👤 Владелец: {name}, {phone}, {city}\n\n"
+            "🐾 {pet_name} — {breed}\n"
+            "{sex_icon} Пол: {sex}   |   Возраст: {age}\n"
+            "🎯 Цель: {goal}\n"
+            "📋 Документы: {docs}\n"
+            "📝 {desc}\n\n"
+            "Отправить на проверку?"
+        ),
+        "en": (
+            "Please check the profile:\n\n"
+            "👤 Owner: {name}, {phone}, {city}\n\n"
+            "🐾 {pet_name} — {breed}\n"
+            "{sex_icon} Sex: {sex}   |   Age: {age}\n"
+            "🎯 Goal: {goal}\n"
+            "📋 Documents: {docs}\n"
+            "📝 {desc}\n\n"
+            "Send for review?"
+        ),
+        "he": (
+            "בדקו את הפרופיל:\n\n"
+            "👤 בעלים: {name}, {phone}, {city}\n\n"
+            "🐾 {pet_name} — {breed}\n"
+            "{sex_icon} מין: {sex}   |   גיל: {age}\n"
+            "🎯 מטרה: {goal}\n"
+            "📋 מסמכים: {docs}\n"
+            "📝 {desc}\n\n"
+            "לשלוח לבדיקה?"
+        ),
+    },
+    "frd_approved": {
+        "ru": "🎉 Анкета «{name}» одобрена! Теперь вы можете предлагать знакомства 💞",
+        "en": "🎉 Profile “{name}” approved! Now you can propose meetings 💞",
+        "he": "🎉 הפרופיל «{name}» אושר! עכשיו אפשר להציע היכרויות 💞",
+    },
+    "frd_declined": {
+        "ru": "😔 Анкета «{name}» отклонена. Свяжитесь с нами, чтобы уточнить детали.",
+        "en": "😔 Profile “{name}” was declined. Contact us for details.",
+        "he": "😔 הפרופיל «{name}» נדחה. צרו איתנו קשר לפרטים.",
+    },
+    "frd_empty": {
+        "ru": "Пока нет анкет в этом разделе — создайте первую! 🐾",
+        "en": "No profiles in this section yet — create the first one! 🐾",
+        "he": "אין עדיין פרופילים בקטגוריה — צרו את הראשון! 🐾",
+    },
+    "frd_card_sex": {"ru": "Пол", "en": "Sex", "he": "מין"},
+    "frd_card_age": {"ru": "возраст", "en": "age", "he": "גיל"},
+    "frd_card_goal": {"ru": "Ищет", "en": "Looking for", "he": "מחפש"},
+    "frd_card_docs": {"ru": "Документы", "en": "Documents", "he": "מסמכים"},
+    "goal_friend": {"ru": "друга для прогулок", "en": "a friend for walks", "he": "חבר לטיולים"},
+    "goal_mate": {"ru": "пару для вязки", "en": "a mate for breeding", "he": "בן/בת זוג להרבעה"},
+    "goal_both": {"ru": "друга и пару", "en": "a friend and a mate", "he": "חבר ובן/בת זוג"},
+    "sex_male": {"ru": "мальчик", "en": "male", "he": "זכר"},
+    "sex_female": {"ru": "девочка", "en": "female", "he": "נקבה"},
+    "btn_propose": {"ru": "💌 Предложить знакомство", "en": "💌 Propose a meeting", "he": "💌 להציע היכרות"},
+    "frd_need_profile": {
+        "ru": "Чтобы предлагать знакомства, сначала создайте анкету своего питомца и дождитесь её проверки 📝",
+        "en": "To propose meetings, first create your pet's profile and wait for verification 📝",
+        "he": "כדי להציע היכרויות, קודם צרו פרופיל לחיית המחמד שלכם והמתינו לאימות 📝",
+    },
+    "propose_sent": {
+        "ru": "💌 Предложение <b>{id}</b> отправлено!\n\nМы проверим совместимость и свяжем вас с владельцем 🐾",
+        "en": "💌 Proposal <b>{id}</b> sent!\n\nWe will check compatibility and connect you with the owner 🐾",
+        "he": "💌 ההצעה <b>{id}</b> נשלחה!\n\nנבדוק התאמה ונחבר אתכם עם הבעלים 🐾",
+    },
+    "mating_fee_note": {
+        "ru": "💳 За организацию вязки — сервисный сбор {fee}₪ (оплата после подтверждения).",
+        "en": "💳 Breeding arrangement service fee — {fee}₪ (paid after confirmation).",
+        "he": "💳 עמלת שירות לארגון הרבעה — {fee}₪ (תשלום לאחר האישור).",
+    },
+    "mtc_confirmed": {
+        "ru": (
+            "🎉 Знакомство <b>{id}</b> одобрено!\n\n"
+            "🐾 {pet1} и {pet2} — отличная пара!\n"
+            "Свяжитесь с владельцем и договоритесь о встрече:"
+        ),
+        "en": (
+            "🎉 Meeting <b>{id}</b> approved!\n\n"
+            "🐾 {pet1} and {pet2} — a great match!\n"
+            "Contact the owner and arrange the meeting:"
+        ),
+        "he": (
+            "🎉 ההיכרות <b>{id}</b> אושרה!\n\n"
+            "🐾 {pet1} ו-{pet2} — התאמה מצוינת!\n"
+            "צרו קשר עם הבעלים ותאמו פגישה:"
+        ),
+    },
+    "mtc_declined": {
+        "ru": "😔 Знакомство <b>{id}</b> не согласовано. Посмотрите другие анкеты в каталоге 🐾",
+        "en": "😔 Meeting <b>{id}</b> was not approved. Check other profiles in the catalog 🐾",
+        "he": "😔 ההיכרות <b>{id}</b> לא אושרה. בדקו פרופילים אחרים בקטלוג 🐾",
+    },
 }
 
 

@@ -228,3 +228,64 @@ def test_boarding_translations_complete():
     for key in ("board_menu", "sit_intro", "brd_intro", "brd_summary", "cli_brd_confirmed"):
         for lang in i18n.LANGS:
             assert i18n.T[key].get(lang)
+
+
+def test_boarding_commission_math():
+    # 7 суток по 80₪: стоимость 560, сбор 10% = 56, комиссия ситтера 20% = 112
+    cost = 80 * 7
+    assert bot.compute_client_fee(cost) == 56
+    assert round(cost * bot.OWNER_COMMISSION) == 112
+
+
+# ---------- Знакомства ----------
+
+FRIENDS = [
+    {"id": "FRD-001", "кличка": "Айза", "вид_порода": "Собака, овчарка", "пол": "Ж",
+     "возраст": "3", "город": "Тель-Авив", "цель": "вязка", "документы": "прививки есть",
+     "описание": "", "tg_id": 301, "статус": "проверен", "владелец_имя": "Иван", "телефон": "050"},
+    {"id": "FRD-002", "кличка": "Рекс", "вид_порода": "Собака, овчарка", "пол": "М",
+     "возраст": "4", "город": "Хайфа", "цель": "обе", "документы": "прививки, родословная",
+     "описание": "добрый", "tg_id": 302, "статус": "проверен", "владелец_имя": "Пётр", "телефон": "051"},
+    {"id": "FRD-003", "кличка": "Боня", "вид_порода": "Собака, шпиц", "пол": "Ж",
+     "возраст": "2", "город": "Тель-Авив", "цель": "дружба", "документы": "прививки",
+     "описание": "", "tg_id": 303, "статус": "проверен", "владелец_имя": "Анна", "телефон": "052"},
+    {"id": "FRD-004", "кличка": "Скрытый", "вид_порода": "Кот", "пол": "М",
+     "возраст": "1", "город": "Хайфа", "цель": "дружба", "документы": "",
+     "описание": "", "tg_id": 304, "статус": "на проверке", "владелец_имя": "Х", "телефон": "053"},
+]
+
+
+def test_friend_profiles_filtered_by_goal():
+    put_cache(config.SHEET_FRIENDS, FRIENDS)
+    mating = [p["id"] for p in sheets.get_friend_profiles("вязка")]
+    assert mating == ["FRD-001", "FRD-002"]  # «обе» попадает в вязку
+    friends = [p["id"] for p in sheets.get_friend_profiles("дружба")]
+    assert friends == ["FRD-002", "FRD-003"]  # неодобренный FRD-004 скрыт
+
+
+def test_friend_profile_by_tg_only_approved():
+    put_cache(config.SHEET_FRIENDS, FRIENDS)
+    assert sheets.get_friend_by_tg(301)["кличка"] == "Айза"
+    assert sheets.get_friend_by_tg(304) is None  # на проверке — нельзя предлагать
+
+
+def test_format_friend_card():
+    put_cache(config.SHEET_FRIENDS, FRIENDS)
+    text = bot.format_friend_card(FRIENDS[0], 1, 2, "ru")
+    assert "Айза" in text
+    assert "девочка" in text
+    assert "пару для вязки" in text
+    text_en = bot.format_friend_card(FRIENDS[0], 1, 2, "en")
+    assert "female" in text_en
+
+
+def test_mating_fee_logic():
+    # сбор берётся, если хотя бы одна сторона ищет вязку (или «обе»)
+    for g1, g2, expected in [
+        ("вязка", "вязка", bot.MATING_FEE),
+        ("дружба", "обе", bot.MATING_FEE),
+        ("дружба", "дружба", 0),
+    ]:
+        goals = {g1, g2}
+        fee = bot.MATING_FEE if goals & {"вязка", "обе"} else 0
+        assert fee == expected
