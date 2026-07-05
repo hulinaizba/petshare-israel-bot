@@ -19,6 +19,30 @@ T = {
         "en": "🌐 Choose your language:",
         "he": "🌐 בחרו שפה:",
     },
+    # Первое знакомство: человек ещё не выбрал язык, поэтому текст на всех трёх
+    "choose_lang_first": {
+        "ru": (
+            "🐾 <b>PetShare Israel</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "🇷🇺 Добро пожаловать! Выберите язык интерфейса:\n\n"
+            "🇬🇧 Welcome! Choose your interface language:\n\n"
+            "🇮🇱 !ברוכים הבאים! בחרו את שפת הממשק"
+        ),
+        "en": (
+            "🐾 <b>PetShare Israel</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "🇷🇺 Добро пожаловать! Выберите язык интерфейса:\n\n"
+            "🇬🇧 Welcome! Choose your interface language:\n\n"
+            "🇮🇱 !ברוכים הבאים! בחרו את שפת הממשק"
+        ),
+        "he": (
+            "🐾 <b>PetShare Israel</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "🇷🇺 Добро пожаловать! Выберите язык интерфейса:\n\n"
+            "🇬🇧 Welcome! Choose your interface language:\n\n"
+            "🇮🇱 !ברוכים הבאים! בחרו את שפת הממשק"
+        ),
+    },
     "lang_set": {
         "ru": "✅ Язык переключён на русский.",
         "en": "✅ Language switched to English.",

@@ -245,7 +245,9 @@ def card_keyboard(category, index, total, animal_id, lang):
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "lang" not in context.user_data:
         await update.message.reply_text(
-            t("choose_lang", "ru"), reply_markup=language_keyboard()
+            t("choose_lang_first", "ru"),
+            reply_markup=language_keyboard(),
+            parse_mode="HTML",
         )
         return
     lang = L(context)
