@@ -143,3 +143,11 @@ def test_format_card_no_accompaniment_for_safe():
 def test_welcome_mentions_owners():
     assert "Для владельцев" in bot.WELCOME_TEXT
     assert "АКЦИЯ" not in bot.WELCOME_TEXT
+
+
+def test_about_owner_section_first():
+    assert "питомец может работать" in bot.ABOUT_TEXT
+    # блок владельца идёт раньше блока аренды
+    assert bot.ABOUT_TEXT.index("питомец может работать") < bot.ABOUT_TEXT.index("арендовать животное")
+    assert "20%" in bot.ABOUT_TEXT
+    assert "10%" in bot.ABOUT_TEXT
