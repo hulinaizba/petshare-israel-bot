@@ -304,6 +304,27 @@ def test_format_friend_card():
     assert "female" in text_en
 
 
+def test_resolve_msg_target():
+    put_cache(config.SHEET_ANIMALS, ANIMALS)
+    put_cache(config.SHEET_SITTERS, SITTERS)
+    put_cache(config.SHEET_FRIENDS, FRIENDS)
+    put_cache(config.SHEET_OWNERS, [
+        {"id": "OWN-001", "имя": "Иван", "tg_id": 111, "телефон": "+972-50-000-0001"},
+    ])
+    # животное → владелец
+    tg, label, phone = bot.resolve_msg_target("a", "AN-001")
+    assert tg == "111" and label == "Луна" and "0001" in phone
+    # ситтер
+    tg, label, _ = bot.resolve_msg_target("s", "SIT-001")
+    assert tg == "201" and label == "Дана"
+    # анкета знакомств
+    tg, label, _ = bot.resolve_msg_target("f", "FRD-001")
+    assert tg == "301" and label == "Айза"
+    # неизвестный тип — безопасный фолбэк
+    tg, label, phone = bot.resolve_msg_target("x", "ZZZ")
+    assert tg == "" and label == "ZZZ" and phone == ""
+
+
 def test_mating_fee_logic():
     # сбор берётся, если хотя бы одна сторона ищет вязку (или «обе»)
     for g1, g2, expected in [

@@ -65,6 +65,42 @@ T = {
         "en": "You can't propose a meeting to your own pet 😄 Choose another profile!",
         "he": "אי אפשר להציע היכרות לחיית המחמד של עצמכם 😄 בחרו פרופיל אחר!",
     },
+
+    # ---------- Сообщения через бота ----------
+    "btn_ask": {"ru": "✉️ Задать вопрос", "en": "✉️ Ask a question", "he": "✉️ לשאול שאלה"},
+    "ask_intro": {
+        "ru": "✉️ Ваш вопрос о «{name}» — напишите одним сообщением:\n\nОтменить — /cancel",
+        "en": "✉️ Your question about “{name}” — write it in one message:\n\nCancel — /cancel",
+        "he": "✉️ השאלה שלכם על «{name}» — כתבו בהודעה אחת:\n\nלביטול — /cancel",
+    },
+    "msg_sent": {
+        "ru": "✅ Сообщение отправлено! Ответ придёт прямо сюда, в бот 💬",
+        "en": "✅ Message sent! The reply will arrive right here in the bot 💬",
+        "he": "✅ ההודעה נשלחה! התשובה תגיע ישירות לכאן, לבוט 💬",
+    },
+    "btn_reply": {"ru": "💬 Ответить", "en": "💬 Reply", "he": "💬 להשיב"},
+    "incoming_msg": {
+        "ru": "💬 <b>Сообщение по теме «{label}»</b>\n\n{text}",
+        "en": "💬 <b>Message about “{label}”</b>\n\n{text}",
+        "he": "💬 <b>הודעה בנושא «{label}»</b>\n\n{text}",
+    },
+    "reply_intro": {
+        "ru": "💬 Напишите ответ одним сообщением:\n\nОтменить — /cancel",
+        "en": "💬 Write your reply in one message:\n\nCancel — /cancel",
+        "he": "💬 כתבו את התשובה בהודעה אחת:\n\nלביטול — /cancel",
+    },
+    "reply_label": {"ru": "ответ", "en": "reply", "he": "תשובה"},
+    "btn_wish": {"ru": "💡 Не нашли? Напишите нам", "en": "💡 Can't find it? Tell us", "he": "💡 לא מצאתם? כתבו לנו"},
+    "wish_intro": {
+        "ru": "💡 Напишите, кого или что вы ищете (животное, услугу, дату, город) — мы постараемся найти:\n\nОтменить — /cancel",
+        "en": "💡 Tell us who or what you are looking for (animal, service, date, city) — we will try to find it:\n\nCancel — /cancel",
+        "he": "💡 כתבו מי או מה אתם מחפשים (בעל חיים, שירות, תאריך, עיר) — ננסה למצוא:\n\nלביטול — /cancel",
+    },
+    "wish_sent": {
+        "ru": "✅ Спасибо! Мы получили ваше пожелание и свяжемся с вами 🐾",
+        "en": "✅ Thank you! We received your request and will contact you 🐾",
+        "he": "✅ תודה! קיבלנו את הבקשה וניצור קשר 🐾",
+    },
     "lang_set": {
         "ru": "✅ Язык переключён на русский.",
         "en": "✅ Language switched to English.",

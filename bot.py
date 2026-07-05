@@ -77,6 +77,9 @@ BRD_PET, BRD_DATES, BRD_DAYS, BRD_CITY, BRD_NOTES, BRD_PHONE, BRD_CONFIRM = rang
     FRD_AGE, FRD_GOAL, FRD_DOCS, FRD_DESC, FRD_PHOTO, FRD_CONFIRM,
 ) = range(50, 62)
 
+# Состояние написания сообщения (вопрос, ответ, пожелание)
+WRITE_MSG = 70
+
 # Сервисный сбор за организацию вязки, ₪ (дружба — бесплатно)
 MATING_FEE = 50
 
@@ -138,6 +141,7 @@ def main_menu_keyboard(lang):
         [InlineKeyboardButton(t("btn_owner", lang), callback_data="owner_start")],
         [InlineKeyboardButton(t("btn_boarding", lang), callback_data="board_menu")],
         [InlineKeyboardButton(t("btn_friends", lang), callback_data="frd_menu")],
+        [InlineKeyboardButton(t("btn_wish", lang), callback_data="wish")],
         [InlineKeyboardButton(t("btn_about", lang), callback_data="about")],
         [InlineKeyboardButton(t("btn_lang", lang), callback_data="lang")],
     ])
@@ -329,6 +333,7 @@ def card_keyboard(category, index, total, animal_id, lang):
     if nav:
         rows.append(nav)
     rows.append([InlineKeyboardButton(t("btn_request", lang), callback_data=f"request:{animal_id}")])
+    rows.append([InlineKeyboardButton(t("btn_ask", lang), callback_data=f"msg:a:{animal_id}")])
     rows.append([
         InlineKeyboardButton(t("btn_categories", lang), callback_data="catalog"),
         InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
@@ -530,6 +535,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows.append([InlineKeyboardButton(
             t("btn_propose", lang), callback_data=f"propose:{profile.get('id', '')}"
         )])
+        rows.append([InlineKeyboardButton(
+            t("btn_ask", lang), callback_data=f"msg:f:{profile.get('id', '')}"
+        )])
         rows.append([
             InlineKeyboardButton(t("btn_friends", lang), callback_data="frd_menu"),
             InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
@@ -635,6 +643,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
         rows.append([InlineKeyboardButton(
             t("btn_request_sitter", lang), callback_data=f"brdreq:{sitter.get('id', '')}"
+        )])
+        rows.append([InlineKeyboardButton(
+            t("btn_ask", lang), callback_data=f"msg:s:{sitter.get('id', '')}"
         )])
         rows.append([
             InlineKeyboardButton(t("btn_boarding", lang), callback_data="board_menu"),
@@ -1898,6 +1909,148 @@ async def admin_match_decision(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.exception("Не удалось уведомить участников знакомства %s", match_id)
 
 
+# ---------- Сообщения через бота ----------
+
+def resolve_msg_target(kind, obj_id):
+    """Куда доставить сообщение: (tg_id, подпись, телефон для WhatsApp).
+
+    kind: 'a' — животное (пишем владельцу), 's' — ситтер, 'f' — анкета знакомств.
+    """
+    if kind == "a":
+        animal = sheets.get_animal_any(obj_id) or {}
+        owner = sheets.get_owner_by_id(str(animal.get("владелец_id", "")).strip()) or {}
+        return (
+            str(owner.get("tg_id", "")).strip(),
+            str(animal.get("имя", "")).strip() or obj_id,
+            owner.get("телефон", ""),
+        )
+    if kind == "s":
+        sitter = sheets.get_sitter_any(obj_id) or {}
+        return (
+            str(sitter.get("tg_id", "")).strip(),
+            str(sitter.get("имя", "")).strip() or obj_id,
+            sitter.get("телефон", ""),
+        )
+    if kind == "f":
+        profile = sheets.get_friend_any(obj_id) or {}
+        return (
+            str(profile.get("tg_id", "")).strip(),
+            str(profile.get("кличка", "")).strip() or obj_id,
+            profile.get("телефон", ""),
+        )
+    return "", obj_id, ""
+
+
+async def msg_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка «Задать вопрос» на карточке."""
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    _, kind, obj_id = query.data.split(":", 2)
+    target_tg, label, phone = resolve_msg_target(kind, obj_id)
+    context.user_data["msg_ctx"] = {
+        "target_tg": target_tg, "label": label, "phone": phone, "kind": "вопрос",
+    }
+    await query.message.reply_text(t("ask_intro", lang, name=label), parse_mode="HTML")
+    return WRITE_MSG
+
+
+async def reply_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка «Ответить» под входящим сообщением."""
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    target_tg = query.data.split(":", 1)[1]
+    context.user_data["msg_ctx"] = {
+        "target_tg": target_tg, "label": t("reply_label", lang),
+        "phone": "", "kind": "ответ",
+    }
+    await query.message.reply_text(t("reply_intro", lang))
+    return WRITE_MSG
+
+
+async def wish_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка «Не нашли? Напишите нам»."""
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    context.user_data["msg_ctx"] = {
+        "target_tg": str(config.ADMIN_CHAT_ID), "label": "пожелание",
+        "phone": "", "kind": "пожелание",
+    }
+    await query.message.reply_text(t("wish_intro", lang))
+    return WRITE_MSG
+
+
+async def msg_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Пользователь написал текст сообщения — доставляем."""
+    lang = L(context)
+    ctx = context.user_data.get("msg_ctx") or {}
+    user = update.effective_user
+    text = update.message.text.strip()
+    from_name = user.full_name + (f" (@{user.username})" if user.username else "")
+
+    msg_id = sheets.next_message_id()
+    sheets.add_message([
+        msg_id,
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        from_name,
+        user.id,
+        ctx.get("target_tg", ""),
+        ctx.get("label", ""),
+        text,
+        ctx.get("kind", ""),
+    ])
+
+    target_tg = str(ctx.get("target_tg", "")).strip()
+    delivered = False
+    if target_tg.isdigit() and int(target_tg) != user.id:
+        to_lang = user_lang(context, target_tg)
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(t("btn_reply", to_lang), callback_data=f"wrt:{user.id}")]]
+        )
+        try:
+            await context.bot.send_message(
+                int(target_tg),
+                t("incoming_msg", to_lang, label=ctx.get("label", ""), text=text),
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+            delivered = True
+        except Exception:
+            logger.exception("Не доставлено сообщение %s адресату %s", msg_id, target_tg)
+
+    # Копия администратору (если он не отправитель и не получатель)
+    if user.id != config.ADMIN_CHAT_ID and target_tg != str(config.ADMIN_CHAT_ID):
+        note = "" if delivered else "\n⚠️ У адресата нет Telegram — передайте через WhatsApp!"
+        admin_rows = []
+        wa = whatsapp_link(ctx.get("phone", ""))
+        if wa and not delivered:
+            admin_rows.append([InlineKeyboardButton("💬 WhatsApp адресата", url=wa)])
+        try:
+            await context.bot.send_message(
+                config.ADMIN_CHAT_ID,
+                f"💬 <b>{msg_id}</b> {from_name} → «{ctx.get('label', '')}»:\n\n{text}{note}",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(admin_rows) if admin_rows else None,
+            )
+        except Exception:
+            logger.exception("Не отправлена копия сообщения %s администратору", msg_id)
+
+    key = "wish_sent" if ctx.get("kind") == "пожелание" else "msg_sent"
+    await update.message.reply_text(t(key, lang))
+    context.user_data.pop("msg_ctx", None)
+    return ConversationHandler.END
+
+
+async def msg_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("msg_ctx", None)
+    await update.message.reply_text(
+        t("req_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
 async def use_buttons_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Пользователь написал текст там, где ждём нажатие кнопки."""
     await update.message.reply_text(t("use_buttons", L(context)))
@@ -2088,11 +2241,25 @@ def main():
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(CommandHandler("translate", cmd_translate))
+    message_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(msg_start, pattern=r"^msg:"),
+            CallbackQueryHandler(reply_start, pattern=r"^wrt:"),
+            CallbackQueryHandler(wish_start, pattern=r"^wish$"),
+        ],
+        states={
+            WRITE_MSG: [MessageHandler(filters.TEXT & ~filters.COMMAND, msg_text)],
+        },
+        fallbacks=[CommandHandler("cancel", msg_cancel)],
+        conversation_timeout=1800,
+    )
+
     app.add_handler(request_conv)
     app.add_handler(owner_conv)
     app.add_handler(sitter_conv)
     app.add_handler(boarding_conv)
     app.add_handler(friend_conv)
+    app.add_handler(message_conv)
     app.add_handler(CallbackQueryHandler(admin_decision, pattern=r"^adm_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_owner_decision, pattern=r"^own_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_sitter_decision, pattern=r"^sit_(ok|no):"))

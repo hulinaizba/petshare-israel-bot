@@ -303,3 +303,14 @@ def get_match(match_id):
 
 def update_match_status(match_id, status):
     return _update_fields(config.SHEET_MATCHES, match_id, {"статус": status})
+
+
+# ---------- Сообщения (переписка через бота) ----------
+
+def next_message_id():
+    records = _get_records(config.SHEET_MESSAGES)
+    return f"MSG-{len(records) + 1:03d}"
+
+
+def add_message(row):
+    _append_row(config.SHEET_MESSAGES, row)
