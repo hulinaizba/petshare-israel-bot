@@ -330,6 +330,140 @@ T = {
         "en": "🎉 Ride <b>{id}</b> confirmed!\n\n🐴 {horse}, {date} ({tod})\n\nContact the owner to agree on the exact time and meeting point:",
         "he": "🎉 הרכיבה <b>{id}</b> אושרה!\n\n🐴 {horse}, {date} ({tod})\n\nצרו קשר עם הבעלים לתיאום השעה ומקום המפגש:",
     },
+    # ---------- Квиз «Подбери породу» ----------
+    "btn_quiz": {"ru": "🐶 Подобрать породу", "en": "🐶 Find my breed", "he": "🐶 להתאים גזע"},
+    "qz_q1": {
+        "ru": "🐶 <b>Подбор породы</b> — 5 коротких вопросов, 30 секунд.\n\n<b>1/5.</b> Где вы живёте?",
+        "en": "🐶 <b>Breed match</b> — 5 short questions, 30 seconds.\n\n<b>1/5.</b> Where do you live?",
+        "he": "🐶 <b>התאמת גזע</b> — 5 שאלות קצרות, 30 שניות.\n\n<b>1/5.</b> איפה אתם גרים?",
+    },
+    "qz_home_apt": {"ru": "🏢 Квартира", "en": "🏢 Apartment", "he": "🏢 דירה"},
+    "qz_home_house": {"ru": "🏡 Дом с двором", "en": "🏡 House with a yard", "he": "🏡 בית עם חצר"},
+    "qz_q2": {"ru": "<b>2/5.</b> Есть ли дети в семье?", "en": "<b>2/5.</b> Any kids in the family?", "he": "<b>2/5.</b> יש ילדים במשפחה?"},
+    "qz_q3": {
+        "ru": "<b>3/5.</b> Сколько времени в день готовы гулять?",
+        "en": "<b>3/5.</b> How much time per day for walks?",
+        "he": "<b>3/5.</b> כמה זמן ביום לטיולים?",
+    },
+    "qz_t0": {"ru": "🚶 До часа", "en": "🚶 Up to an hour", "he": "🚶 עד שעה"},
+    "qz_t1": {"ru": "🏃 1-2 часа", "en": "🏃 1-2 hours", "he": "🏃 1-2 שעות"},
+    "qz_t2": {"ru": "⚡ Больше 2 часов", "en": "⚡ Over 2 hours", "he": "⚡ יותר משעתיים"},
+    "qz_q4": {
+        "ru": "<b>4/5.</b> Был ли у вас опыт с собаками?",
+        "en": "<b>4/5.</b> Have you had dogs before?",
+        "he": "<b>4/5.</b> היה לכם ניסיון עם כלבים?",
+    },
+    "qz_exp_no": {"ru": "🔰 Первая собака", "en": "🔰 First dog", "he": "🔰 כלב ראשון"},
+    "qz_exp_yes": {"ru": "🐕 Уже был опыт", "en": "🐕 Had dogs before", "he": "🐕 כבר היה ניסיון"},
+    "qz_q5": {
+        "ru": "<b>5/5.</b> Что для вас важнее всего?",
+        "en": "<b>5/5.</b> What matters most to you?",
+        "he": "<b>5/5.</b> מה הכי חשוב לכם?",
+    },
+    "qz_p_calm": {"ru": "😌 Спокойный друг", "en": "😌 A calm companion", "he": "😌 חבר רגוע"},
+    "qz_p_act": {"ru": "🎾 Игры и активность", "en": "🎾 Play and activity", "he": "🎾 משחקים ופעילות"},
+    "qz_p_guard": {"ru": "🛡 Защита дома", "en": "🛡 Home protection", "he": "🛡 הגנה על הבית"},
+    "quiz_result": {
+        "ru": (
+            "🎉 <b>Вам подойдут эти породы:</b>\n\n{breeds}\n\n"
+            "🤔 Не спешите покупать щенка! Сначала познакомьтесь с такой "
+            "собакой вживую: погуляйте, поиграйте — и поймёте, ваша ли это порода.\n\n"
+            "Оставьте заявку — подберём собаку рядом с вами:"
+        ),
+        "en": (
+            "🎉 <b>These breeds suit you:</b>\n\n{breeds}\n\n"
+            "🤔 Don't rush to buy a puppy! First meet such a dog in real life: "
+            "walk, play — and see if it is truly your breed.\n\n"
+            "Leave a request — we will find a dog near you:"
+        ),
+        "he": (
+            "🎉 <b>הגזעים שמתאימים לכם:</b>\n\n{breeds}\n\n"
+            "🤔 אל תמהרו לקנות גור! קודם הכירו כלב כזה במציאות: "
+            "טיילו, שחקו — ותבינו אם זה באמת הגזע שלכם.\n\n"
+            "השאירו בקשה — נמצא כלב קרוב אליכם:"
+        ),
+    },
+    "btn_try_breed": {"ru": "🐾 Попробовать: {breed}", "en": "🐾 Try: {breed}", "he": "🐾 לנסות: {breed}"},
+    "lead_saved": {
+        "ru": "✅ Записали! Как только найдём «{breed}» рядом с вами — сразу напишем 🐾\n\nА пока загляните в каталог:",
+        "en": "✅ Saved! As soon as we find a “{breed}” near you — we will message you 🐾\n\nMeanwhile, check the catalog:",
+        "he": "✅ נרשם! ברגע שנמצא «{breed}» קרוב אליכם — נכתוב לכם 🐾\n\nבינתיים הציצו בקטלוג:",
+    },
+
+    # ---------- Доска объявлений ----------
+    "btn_ads": {"ru": "📢 Объявления", "en": "📢 Classifieds", "he": "📢 לוח מודעות"},
+    "ads_menu": {
+        "ru": (
+            "📢 <b>Доска объявлений</b>\n\n"
+            "💰 Продажа щенков и животных\n"
+            "🔍 Объявления «ищу / куплю»\n\n"
+            "Связь с автором — прямо через бот, кнопкой под объявлением.\n\n"
+            "⚠️ Сделки проходят напрямую между сторонами. Проверяйте документы "
+            "и прививки: продажа собак и кошек в Израиле регулируется законом."
+        ),
+        "en": (
+            "📢 <b>Classifieds</b>\n\n"
+            "💰 Puppies and animals for sale\n"
+            "🔍 “Looking for / want to buy” ads\n\n"
+            "Contact the author right through the bot, via the button under the ad.\n\n"
+            "⚠️ Deals happen directly between the parties. Check documents "
+            "and vaccinations: selling dogs and cats in Israel is regulated by law."
+        ),
+        "he": (
+            "📢 <b>לוח מודעות</b>\n\n"
+            "💰 גורים ובעלי חיים למכירה\n"
+            "🔍 מודעות «מחפש / רוצה לקנות»\n\n"
+            "קשר עם המפרסם — ישירות דרך הבוט, בכפתור מתחת למודעה.\n\n"
+            "⚠️ העסקאות מתבצעות ישירות בין הצדדים. בדקו מסמכים "
+            "וחיסונים: מכירת כלבים וחתולים בישראל מוסדרת בחוק."
+        ),
+    },
+    "btn_ads_new": {"ru": "➕ Разместить объявление", "en": "➕ Post an ad", "he": "➕ לפרסם מודעה"},
+    "btn_ads_sell": {"ru": "💰 Продажа", "en": "💰 For sale", "he": "💰 למכירה"},
+    "btn_ads_seek": {"ru": "🔍 Ищут / куплю", "en": "🔍 Looking for", "he": "🔍 מחפשים"},
+    "ads_empty": {
+        "ru": "Объявлений пока нет — разместите первое, это бесплатно! 📢",
+        "en": "No ads yet — post the first one, it's free! 📢",
+        "he": "אין עדיין מודעות — פרסמו ראשונים, זה בחינם! 📢",
+    },
+    "ad_ask_type": {"ru": "Что размещаем?", "en": "What are we posting?", "he": "מה מפרסמים?"},
+    "btn_ad_sell": {"ru": "💰 Продам", "en": "💰 For sale", "he": "💰 למכירה"},
+    "btn_ad_seek": {"ru": "🔍 Ищу / куплю", "en": "🔍 Looking for", "he": "🔍 מחפש"},
+    "ad_ask_what": {
+        "ru": "Кто это? Вид и порода.\nНапример: <i>щенки корги, 2 месяца</i>",
+        "en": "Who is it? Species and breed.\nFor example: <i>corgi puppies, 2 months</i>",
+        "he": "מי זה? סוג וגזע.\nלדוגמה: <i>גורי קורגי, חודשיים</i>",
+    },
+    "ad_ask_desc": {
+        "ru": "Описание: возраст, прививки, документы, характер?",
+        "en": "Description: age, vaccinations, documents, character?",
+        "he": "תיאור: גיל, חיסונים, מסמכים, אופי?",
+    },
+    "ad_ask_price": {
+        "ru": "Цена, ₪? (0 — договорная; для «ищу» — ваш бюджет)",
+        "en": "Price, ₪? (0 — negotiable; for “looking for” — your budget)",
+        "he": "מחיר, ₪? (0 — לפי סיכום; ל«מחפש» — התקציב שלכם)",
+    },
+    "ad_summary": {
+        "ru": "Проверьте объявление:\n\n{type_label}\n🐾 <b>{what}</b>\n📍 {city}   |   💰 {price}\n📝 {desc}\n\nОтправить на модерацию?",
+        "en": "Please check the ad:\n\n{type_label}\n🐾 <b>{what}</b>\n📍 {city}   |   💰 {price}\n📝 {desc}\n\nSend for moderation?",
+        "he": "בדקו את המודעה:\n\n{type_label}\n🐾 <b>{what}</b>\n📍 {city}   |   💰 {price}\n📝 {desc}\n\nלשלוח לאישור?",
+    },
+    "ad_type_sell": {"ru": "💰 ПРОДАЖА", "en": "💰 FOR SALE", "he": "💰 למכירה"},
+    "ad_type_seek": {"ru": "🔍 ИЩУ / КУПЛЮ", "en": "🔍 LOOKING FOR", "he": "🔍 מחפש"},
+    "price_negotiable": {"ru": "договорная", "en": "negotiable", "he": "לפי סיכום"},
+    "ad_approved": {
+        "ru": "🎉 Ваше объявление «{what}» опубликовано на доске!",
+        "en": "🎉 Your ad “{what}” is now published!",
+        "he": "🎉 המודעה שלכם «{what}» פורסמה!",
+    },
+    "ad_declined": {
+        "ru": "😔 Объявление «{what}» отклонено. Свяжитесь с нами для деталей.",
+        "en": "😔 The ad “{what}” was declined. Contact us for details.",
+        "he": "😔 המודעה «{what}» נדחתה. צרו קשר לפרטים.",
+    },
+    "btn_write_author": {"ru": "✉️ Написать автору", "en": "✉️ Message the author", "he": "✉️ לכתוב למפרסם"},
+
     "cli_rid_declined": {
         "ru": "😔 К сожалению, прогулка <b>{id}</b> не подтверждена — дата занята.\n\nПопробуйте другую дату или другую лошадь 🐴",
         "en": "😔 Unfortunately, ride <b>{id}</b> was not confirmed — the date is taken.\n\nTry another date or another horse 🐴",
@@ -576,14 +710,14 @@ T = {
     # ---------- Каталог и карточки ----------
     "choose_category": {"ru": "Выберите категорию:", "en": "Choose a category:", "he": "בחרו קטגוריה:"},
     "catalog_empty": {
-        "ru": "Каталог пока пуст, загляните позже 🐾",
-        "en": "The catalog is empty for now, come back later 🐾",
-        "he": "הקטלוג ריק כרגע, חזרו מאוחר יותר 🐾",
+        "ru": "Каталог пополняется каждый день 🐾\n\nНапишите, кого вы ищете — мы найдём и первым делом напишем вам!",
+        "en": "The catalog is growing every day 🐾\n\nTell us who you are looking for — we will find them and message you first!",
+        "he": "הקטלוג מתמלא כל יום 🐾\n\nכתבו את מי אתם מחפשים — נמצא ונכתוב לכם ראשונים!",
     },
     "category_empty": {
-        "ru": "В этой категории пока нет животных 🐾",
-        "en": "No animals in this category yet 🐾",
-        "he": "אין עדיין בעלי חיים בקטגוריה הזו 🐾",
+        "ru": "В этой категории пока идёт набор 🐾\n\nНапишите, кого ищете — найдём и напишем вам первым!",
+        "en": "We are still onboarding this category 🐾\n\nTell us who you need — we will find them and message you first!",
+        "he": "בקטגוריה הזו עוד נרשמים 🐾\n\nכתבו את מי אתם צריכים — נמצא ונכתוב לכם ראשונים!",
     },
     "card_age": {"ru": "возраст", "en": "age", "he": "גיל"},
     "card_hour": {"ru": "час", "en": "hour", "he": "שעה"},
@@ -1307,6 +1441,61 @@ VALUES = {
     "проверено": {"en": "verified", "he": "מאומת"},
     "отклонено": {"en": "declined", "he": "נדחה"},
     "отклонён": {"en": "declined", "he": "נדחה"},
+}
+
+
+# Породы для квиза: короткое описание на трёх языках
+BREEDS = {
+    "Мальтипу": {
+        "ru": "гипоаллергенный, ласковый, идеален для квартиры",
+        "en": "hypoallergenic, affectionate, perfect for an apartment",
+        "he": "היפואלרגני, חברותי, מושלם לדירה",
+    },
+    "Кавалер-кинг-чарльз": {
+        "ru": "нежный компаньон, обожает детей и колени",
+        "en": "a gentle companion, loves kids and laps",
+        "he": "בן לוויה עדין, אוהב ילדים וחיבוקים",
+    },
+    "Французский бульдог": {
+        "ru": "спокойный, короткие прогулки, море обаяния",
+        "en": "calm, short walks, endless charm",
+        "he": "רגוע, טיולים קצרים, קסם אינסופי",
+    },
+    "Померанский шпиц": {
+        "ru": "компактный, весёлый, звезда фотосессий",
+        "en": "compact, cheerful, a photo-shoot star",
+        "he": "קומפקטי, עליז, כוכב צילומים",
+    },
+    "Корги": {
+        "ru": "улыбчивый, умный, отлично ладит с детьми",
+        "en": "smiley, smart, great with kids",
+        "he": "מחייך, חכם, מסתדר מצוין עם ילדים",
+    },
+    "Лабрадор": {
+        "ru": "добрейший семейный пёс, терпелив с детьми",
+        "en": "the kindest family dog, patient with kids",
+        "he": "כלב משפחתי טוב לב, סבלני עם ילדים",
+    },
+    "Золотистый ретривер": {
+        "ru": "мягкий характер, любит всех и всё приносит",
+        "en": "a soft character, loves everyone and fetches everything",
+        "he": "אופי רך, אוהב את כולם ומביא הכל",
+    },
+    "Бордер-колли": {
+        "ru": "самая умная порода, нужны нагрузки и задачи",
+        "en": "the smartest breed, needs exercise and tasks",
+        "he": "הגזע החכם ביותר, צריך אתגרים ופעילות",
+    },
+    "Немецкая овчарка": {
+        "ru": "верный защитник, требует опыта и дрессировки",
+        "en": "a loyal protector, needs experience and training",
+        "he": "מגן נאמן, דורש ניסיון ואילוף",
+    },
+    "Ризеншнауцер": {
+        "ru": "серьёзный охранник и спортсмен для опытных",
+        "en": "a serious guard and athlete for experienced owners",
+        "he": "שומר רציני וספורטאי לבעלים מנוסים",
+    },
 }
 
 

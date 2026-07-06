@@ -95,6 +95,52 @@ RID_TIME, RID_DATE, RID_PEOPLE, RID_EXP, RID_WISHES, RID_PHONE, RID_CONFIRM = ra
 # Состояния отзыва
 REV_PICK, REV_RATE, REV_TEXT = range(110, 113)
 
+# Состояния квиза «Подбери породу» и заявки на пробу породы
+QZ_HOME, QZ_KIDS, QZ_TIME, QZ_EXP, QZ_PRIO = range(120, 125)
+LEAD_CITY, LEAD_PHONE = range(130, 132)
+
+# Состояния объявления
+AD_TYPE, AD_WHAT, AD_DESC, AD_PRICE, AD_CITY, AD_PHOTO, AD_CONFIRM = range(140, 147)
+
+# Характеристики пород для подбора: apt — ок в квартире, kids/calm/act/guard — 0-2,
+# time — потребность в прогулках (0 — до часа, 1 — 1-2 ч, 2 — 2+ ч), novice — ок новичку
+BREED_TRAITS = {
+    "Мальтипу":            dict(apt=True,  kids=2, time=0, novice=True,  calm=2, act=1, guard=0),
+    "Кавалер-кинг-чарльз": dict(apt=True,  kids=2, time=0, novice=True,  calm=2, act=1, guard=0),
+    "Французский бульдог": dict(apt=True,  kids=1, time=0, novice=True,  calm=2, act=0, guard=0),
+    "Померанский шпиц":    dict(apt=True,  kids=1, time=0, novice=True,  calm=1, act=1, guard=0),
+    "Корги":               dict(apt=True,  kids=2, time=1, novice=True,  calm=0, act=2, guard=0),
+    "Лабрадор":            dict(apt=False, kids=2, time=2, novice=True,  calm=1, act=2, guard=0),
+    "Золотистый ретривер": dict(apt=False, kids=2, time=2, novice=True,  calm=1, act=2, guard=0),
+    "Бордер-колли":        dict(apt=False, kids=1, time=2, novice=False, calm=0, act=2, guard=0),
+    "Немецкая овчарка":    dict(apt=False, kids=1, time=2, novice=False, calm=0, act=1, guard=2),
+    "Ризеншнауцер":        dict(apt=False, kids=1, time=2, novice=False, calm=0, act=1, guard=2),
+}
+
+
+def pick_breeds(home, kids, walk_time, novice, priority):
+    """Топ-3 породы по ответам квиза.
+
+    home: 'apt'|'house'; kids: bool; walk_time: 0|1|2;
+    novice: bool; priority: 'calm'|'act'|'guard'.
+    """
+    scored = []
+    for breed, tr in BREED_TRAITS.items():
+        score = 0
+        if home == "apt":
+            score += 3 if tr["apt"] else -3
+        else:
+            score += 1 if not tr["apt"] else 0
+        if kids:
+            score += tr["kids"]
+        score += 2 - abs(tr["time"] - walk_time)
+        if novice:
+            score += 2 if tr["novice"] else -4
+        score += tr[priority] * 2
+        scored.append((score, breed))
+    scored.sort(key=lambda pair: (-pair[0], pair[1]))
+    return [breed for _, breed in scored[:3]]
+
 # Сервисный сбор за организацию вязки, ₪ (дружба — бесплатно)
 MATING_FEE = 50
 
@@ -203,10 +249,46 @@ def main_menu_keyboard(lang):
         [InlineKeyboardButton(t("btn_boarding", lang), callback_data="board_menu")],
         [InlineKeyboardButton(t("btn_friends", lang), callback_data="frd_menu")],
         [InlineKeyboardButton(t("btn_horses", lang), callback_data="horses_menu")],
+        [InlineKeyboardButton(t("btn_quiz", lang), callback_data="quiz")],
+        [InlineKeyboardButton(t("btn_ads", lang), callback_data="ads_menu")],
         [InlineKeyboardButton(t("btn_wish", lang), callback_data="wish")],
         [InlineKeyboardButton(t("btn_about", lang), callback_data="about")],
         [InlineKeyboardButton(t("btn_lang", lang), callback_data="lang")],
     ])
+
+
+def wish_keyboard(lang):
+    """Клавиатура «пустого» экрана: превращаем пустоту в сбор спроса."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_wish", lang), callback_data="wish")],
+        [InlineKeyboardButton(t("btn_quiz", lang), callback_data="quiz")],
+        [InlineKeyboardButton(t("btn_menu", lang), callback_data="menu")],
+    ])
+
+
+def ads_menu_keyboard(lang):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_ads_sell", lang), callback_data="adcard:продам:0")],
+        [InlineKeyboardButton(t("btn_ads_seek", lang), callback_data="adcard:ищу:0")],
+        [InlineKeyboardButton(t("btn_ads_new", lang), callback_data="ad_form")],
+        [InlineKeyboardButton(t("btn_menu", lang), callback_data="menu")],
+    ])
+
+
+def format_ad_card(ad, position, total, lang):
+    type_label = t("ad_type_sell" if str(ad.get("тип", "")).strip() == "продам"
+                   else "ad_type_seek", lang)
+    price = parse_price(ad.get("цена"))
+    lines = [
+        f"{type_label}",
+        f"🐾 <b>{ad.get('что', '')}</b>",
+        "",
+        f"📍 {tr_value(ad.get('город', ''), lang)}   |   💰 {ad_price_label(price, lang)}",
+        f"📝 {ad.get('описание', '')}",
+        "",
+        t("card_pos", lang, pos=position, total=total),
+    ]
+    return "\n".join(lines)
 
 
 def horses_menu_keyboard(lang):
@@ -469,6 +551,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     lang = L(context)
+    # Диплинк ?start=quiz... — сразу предлагаем подбор породы
+    if context.args and context.args[0].startswith("quiz"):
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(t("btn_quiz", lang), callback_data="quiz")]]
+        )
+        await update.message.reply_text("🐶👇", reply_markup=keyboard)
+        return
     await update.message.reply_text(
         t("welcome", lang), reply_markup=main_menu_keyboard(lang), parse_mode="HTML"
     )
@@ -521,6 +610,13 @@ async def cmd_horses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = L(context)
     await update.message.reply_text(
         t("horses_menu", lang), reply_markup=horses_menu_keyboard(lang), parse_mode="HTML"
+    )
+
+
+async def cmd_ads(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    await update.message.reply_text(
+        t("ads_menu", lang), reply_markup=ads_menu_keyboard(lang), parse_mode="HTML"
     )
 
 
@@ -952,16 +1048,53 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "catalog":
         keyboard = catalog_keyboard(lang)
         if keyboard is None:
-            await safe_edit(query,t("catalog_empty", lang))
+            await safe_edit(query, t("catalog_empty", lang), reply_markup=wish_keyboard(lang))
             return
-        await safe_edit(query,t("choose_category", lang), reply_markup=keyboard)
+        await safe_edit(query, t("choose_category", lang), reply_markup=keyboard)
+        return
+
+    if data == "ads_menu":
+        await safe_edit(
+            query, t("ads_menu", lang), reply_markup=ads_menu_keyboard(lang), parse_mode="HTML"
+        )
+        return
+
+    if data.startswith("adcard:"):
+        _, ad_type_val, index_str = data.split(":", 2)
+        ads = sheets.get_ads(ad_type_val)
+        if not ads:
+            await safe_edit(query, t("ads_empty", lang), reply_markup=ads_menu_keyboard(lang))
+            return
+        index = int(index_str) % len(ads)
+        ad = ads[index]
+        total = len(ads)
+        rows = []
+        if total > 1:
+            rows.append([
+                InlineKeyboardButton("◀️", callback_data=f"adcard:{ad_type_val}:{(index - 1) % total}"),
+                InlineKeyboardButton(f"{index + 1}/{total}", callback_data="noop"),
+                InlineKeyboardButton("▶️", callback_data=f"adcard:{ad_type_val}:{(index + 1) % total}"),
+            ])
+        rows.append([InlineKeyboardButton(
+            t("btn_write_author", lang), callback_data=f"msg:d:{ad.get('id', '')}"
+        )])
+        rows.append([
+            InlineKeyboardButton(t("btn_ads", lang), callback_data="ads_menu"),
+            InlineKeyboardButton(t("btn_menu", lang), callback_data="menu"),
+        ])
+        await show_card(
+            query,
+            format_ad_card(ad, index + 1, total, lang),
+            InlineKeyboardMarkup(rows),
+            str(ad.get("фото", "")).strip(),
+        )
         return
 
     if data.startswith("card:"):
         _, category, index_str = data.split(":", 2)
         animals = sheets.get_animals_by_category(category)
         if not animals:
-            await safe_edit(query,t("category_empty", lang))
+            await safe_edit(query, t("category_empty", lang), reply_markup=wish_keyboard(lang))
             return
         index = int(index_str) % len(animals)
         animal = animals[index]
@@ -2240,6 +2373,13 @@ def resolve_msg_target(kind, obj_id):
             str(horse.get("кличка", "")).strip() or obj_id,
             horse.get("телефон", ""),
         )
+    if kind == "d":
+        ad = sheets.get_ad_any(obj_id) or {}
+        return (
+            str(ad.get("tg_id", "")).strip(),
+            str(ad.get("что", "")).strip()[:32] or obj_id,
+            "",
+        )
     return "", obj_id, ""
 
 
@@ -2809,6 +2949,359 @@ async def admin_ride_decision(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.exception("Не удалось уведомить клиента по прогулке %s", ride_id)
 
 
+# ---------- Квиз «Подбери породу» ----------
+
+async def quiz_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    context.user_data["quiz"] = {}
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(t("qz_home_apt", lang), callback_data="qh:apt"),
+        InlineKeyboardButton(t("qz_home_house", lang), callback_data="qh:house"),
+    ]])
+    target = update.callback_query.message if update.callback_query else update.message
+    if update.callback_query:
+        await update.callback_query.answer()
+    await target.reply_text(t("qz_q1", lang), reply_markup=keyboard, parse_mode="HTML")
+    return QZ_HOME
+
+
+async def quiz_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    context.user_data["quiz"]["home"] = query.data.split(":", 1)[1]
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(t("btn_yes", lang), callback_data="qk:yes"),
+        InlineKeyboardButton(t("btn_no", lang), callback_data="qk:no"),
+    ]])
+    await query.message.reply_text(t("qz_q2", lang), reply_markup=keyboard, parse_mode="HTML")
+    return QZ_KIDS
+
+
+async def quiz_kids(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    context.user_data["quiz"]["kids"] = query.data.split(":", 1)[1] == "yes"
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("qz_t0", lang), callback_data="qt:0")],
+        [InlineKeyboardButton(t("qz_t1", lang), callback_data="qt:1")],
+        [InlineKeyboardButton(t("qz_t2", lang), callback_data="qt:2")],
+    ])
+    await query.message.reply_text(t("qz_q3", lang), reply_markup=keyboard, parse_mode="HTML")
+    return QZ_TIME
+
+
+async def quiz_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    context.user_data["quiz"]["time"] = int(query.data.split(":", 1)[1])
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(t("qz_exp_no", lang), callback_data="qe:no"),
+        InlineKeyboardButton(t("qz_exp_yes", lang), callback_data="qe:yes"),
+    ]])
+    await query.message.reply_text(t("qz_q4", lang), reply_markup=keyboard, parse_mode="HTML")
+    return QZ_EXP
+
+
+async def quiz_exp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    context.user_data["quiz"]["novice"] = query.data.split(":", 1)[1] == "no"
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("qz_p_calm", lang), callback_data="qp:calm")],
+        [InlineKeyboardButton(t("qz_p_act", lang), callback_data="qp:act")],
+        [InlineKeyboardButton(t("qz_p_guard", lang), callback_data="qp:guard")],
+    ])
+    await query.message.reply_text(t("qz_q5", lang), reply_markup=keyboard, parse_mode="HTML")
+    return QZ_PRIO
+
+
+async def quiz_prio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    q = context.user_data.get("quiz", {})
+    breeds = pick_breeds(
+        q.get("home", "apt"), q.get("kids", False), q.get("time", 1),
+        q.get("novice", True), query.data.split(":", 1)[1],
+    )
+    lines = [
+        f"{n}. <b>{breed}</b> — {i18n.BREEDS[breed].get(lang, i18n.BREEDS[breed]['ru'])}"
+        for n, breed in enumerate(breeds, 1)
+    ]
+    rows = [
+        [InlineKeyboardButton(
+            t("btn_try_breed", lang, breed=breed), callback_data=f"lead:{breed}"
+        )]
+        for breed in breeds
+    ]
+    rows.append([InlineKeyboardButton(t("btn_catalog", lang), callback_data="catalog")])
+    await query.message.reply_text(
+        t("quiz_result", lang, breeds="\n".join(lines)),
+        reply_markup=InlineKeyboardMarkup(rows),
+        parse_mode="HTML",
+    )
+    context.user_data.pop("quiz", None)
+    return ConversationHandler.END
+
+
+async def quiz_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("quiz", None)
+    await update.message.reply_text(
+        t("req_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
+# ---------- Заявка «попробовать породу» ----------
+
+async def lead_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["lead"] = {"breed": query.data.split(":", 1)[1]}
+    await query.message.reply_text(t("own_ask_city", L(context)))
+    return LEAD_CITY
+
+
+async def lead_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    context.user_data["lead"]["city"] = update.message.text.strip()
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton(t("btn_send_phone", lang), request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+    await update.message.reply_text(t("req_ask_phone", lang), reply_markup=keyboard)
+    return LEAD_PHONE
+
+
+async def lead_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    lead = context.user_data.get("lead", {})
+    phone = (update.message.contact.phone_number if update.message.contact
+             else update.message.text.strip())
+    user = update.effective_user
+    sheets.add_demand([
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        user.id,
+        user.full_name + (f" (@{user.username})" if user.username else ""),
+        lead.get("breed", ""),
+        lead.get("city", ""),
+        phone,
+        "новая",
+    ])
+    keyboard = InlineKeyboardMarkup(
+        [[InlineKeyboardButton(t("btn_catalog", lang), callback_data="catalog")]]
+    )
+    await update.message.reply_text(
+        t("lead_saved", lang, breed=lead.get("breed", "")), reply_markup=ReplyKeyboardRemove()
+    )
+    await update.message.reply_text("👇", reply_markup=keyboard)
+    try:
+        await context.bot.send_message(
+            config.ADMIN_CHAT_ID,
+            f"🎯 <b>Новый спрос</b>: ищут «{lead.get('breed', '')}» "
+            f"в {lead.get('city', '')}\n"
+            f"👤 {user.full_name}, {phone}\n\n"
+            "→ Ищите владельца этой породы: спрос уже есть!",
+            parse_mode="HTML",
+        )
+    except Exception:
+        logger.exception("Не отправлен лид администратору")
+    context.user_data.pop("lead", None)
+    return ConversationHandler.END
+
+
+async def lead_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("lead", None)
+    await update.message.reply_text(
+        t("req_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
+# ---------- Доска объявлений ----------
+
+async def ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+    context.user_data["ad_flow"] = {}
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(t("btn_ad_sell", lang), callback_data="adt:продам"),
+        InlineKeyboardButton(t("btn_ad_seek", lang), callback_data="adt:ищу"),
+    ]])
+    await query.message.reply_text(t("ad_ask_type", lang), reply_markup=keyboard)
+    return AD_TYPE
+
+
+async def ad_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["ad_flow"]["type"] = query.data.split(":", 1)[1]
+    await query.message.reply_text(t("ad_ask_what", L(context)), parse_mode="HTML")
+    return AD_WHAT
+
+
+async def ad_what(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["ad_flow"]["what"] = update.message.text.strip()
+    await update.message.reply_text(t("ad_ask_desc", L(context)))
+    return AD_DESC
+
+
+async def ad_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["ad_flow"]["desc"] = update.message.text.strip()
+    await update.message.reply_text(t("ad_ask_price", L(context)))
+    return AD_PRICE
+
+
+async def ad_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["ad_flow"]["price"] = parse_price(update.message.text)
+    await update.message.reply_text(t("own_ask_city", L(context)))
+    return AD_CITY
+
+
+async def ad_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["ad_flow"]["city"] = update.message.text.strip()
+    await update.message.reply_text(t("own_ask_photo", L(context)))
+    return AD_PHOTO
+
+
+def ad_price_label(price, lang):
+    return f"{price}₪" if price else t("price_negotiable", lang)
+
+
+async def ad_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = L(context)
+    flow = context.user_data["ad_flow"]
+    flow["photo"] = update.message.photo[-1].file_id if update.message.photo else ""
+
+    type_label = t("ad_type_sell" if flow["type"] == "продам" else "ad_type_seek", lang)
+    summary = t(
+        "ad_summary", lang,
+        type_label=type_label, what=flow["what"], city=flow["city"],
+        price=ad_price_label(flow["price"], lang), desc=flow["desc"],
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("btn_own_send", lang), callback_data="ad_send")],
+        [InlineKeyboardButton(t("btn_own_cancel", lang), callback_data="ad_cancel")],
+    ])
+    if flow["photo"]:
+        await update.message.reply_photo(
+            flow["photo"], caption=summary, reply_markup=keyboard, parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(summary, reply_markup=keyboard, parse_mode="HTML")
+    return AD_CONFIRM
+
+
+async def ad_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    lang = L(context)
+    await query.answer()
+
+    if query.data == "ad_cancel":
+        await query.message.reply_text(t("own_cancelled", lang))
+        context.user_data.pop("ad_flow", None)
+        return ConversationHandler.END
+
+    flow = context.user_data["ad_flow"]
+    user = update.effective_user
+    ad_id = sheets.next_ad_id()
+    sheets.add_ad([
+        ad_id,
+        datetime.now().strftime("%d.%m.%Y %H:%M"),
+        flow["type"],
+        user.full_name + (f" (@{user.username})" if user.username else ""),
+        user.id,
+        flow["what"], flow["desc"], flow["price"], flow["city"], flow["photo"],
+        "на проверке",
+    ])
+    await query.message.reply_text(t("own_sent", lang))
+
+    admin_text = (
+        f"🔔 <b>Новое объявление {ad_id}</b> ({flow['type']})\n\n"
+        f"🐾 {flow['what']}\n"
+        f"📍 {flow['city']}   |   💰 {flow['price'] or 'договорная'}\n"
+        f"📝 {flow['desc']}\n"
+        f"👤 {user.full_name}\n\n"
+        "⚠️ Для продажи: проверьте законность (собаки/кошки — регулируется)!"
+    )
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Опубликовать", callback_data=f"ads_ok:{ad_id}"),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f"ads_no:{ad_id}"),
+    ]])
+    try:
+        if flow["photo"]:
+            await context.bot.send_photo(
+                config.ADMIN_CHAT_ID, flow["photo"], caption=admin_text,
+                parse_mode="HTML", reply_markup=keyboard,
+            )
+        else:
+            await context.bot.send_message(
+                config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML", reply_markup=keyboard,
+            )
+    except Exception:
+        logger.exception("Не удалось уведомить администратора об объявлении")
+
+    context.user_data.pop("ad_flow", None)
+    return ConversationHandler.END
+
+
+async def ad_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("ad_flow", None)
+    await update.message.reply_text(
+        t("own_cancelled", L(context)), reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+
+
+async def admin_ad_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Администратор публикует/отклоняет объявление."""
+    query = update.callback_query
+    if update.effective_user.id != config.ADMIN_CHAT_ID:
+        await query.answer("Эта кнопка только для администратора", show_alert=True)
+        return
+    await query.answer()
+
+    action, ad_id = query.data.split(":", 1)
+    ad = sheets.get_ad_any(ad_id)
+    if not ad:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "ads_ok":
+        sheets.update_ad_status(ad_id, "опубликовано")
+        badge = "✅ ОПУБЛИКОВАНО"
+    else:
+        sheets.update_ad_status(ad_id, "отклонено")
+        badge = "❌ ОТКЛОНЕНО"
+
+    if query.message.photo:
+        await query.edit_message_caption(
+            caption=query.message.caption_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+        )
+    else:
+        await safe_edit(
+            query, query.message.text_html + f"\n\n<b>{badge}</b>", parse_mode="HTML"
+        )
+
+    author_tg = str(ad.get("tg_id", "")).strip()
+    if not author_tg.isdigit():
+        return
+    author_lang = user_lang(context, author_tg)
+    try:
+        key = "ad_approved" if action == "ads_ok" else "ad_declined"
+        await context.bot.send_message(
+            int(author_tg), t(key, author_lang, what=ad.get("что", ""))
+        )
+    except Exception:
+        logger.exception("Не удалось уведомить автора объявления %s", author_tg)
+
+
 async def use_buttons_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Пользователь написал текст там, где ждём нажатие кнопки."""
     await update.message.reply_text(t("use_buttons", L(context)))
@@ -2854,6 +3347,8 @@ async def post_init(app):
         ("boarding", "🏡 Передержка / Boarding / פנסיון"),
         ("friends", "💞 Знакомства / Matchmaking / היכרויות"),
         ("horses", "🐴 Конные прогулки / Horse rides / רכיבה"),
+        ("quiz", "🐶 Подобрать породу / Find my breed / להתאים גזע"),
+        ("ads", "📢 Объявления / Classifieds / לוח מודעות"),
         ("my", "📋 Мои заявки / My requests / הבקשות שלי"),
         ("review", "⭐ Оставить отзыв / Leave a review / ביקורת"),
         ("language", "🌐 Язык / Language / שפה"),
@@ -3000,6 +3495,7 @@ def main():
     app.add_handler(CommandHandler("friends", cmd_friends))
     app.add_handler(CommandHandler("horses", cmd_horses))
     app.add_handler(CommandHandler("my", cmd_my))
+    app.add_handler(CommandHandler("ads", cmd_ads))
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
@@ -3086,6 +3582,70 @@ def main():
         conversation_timeout=1800,
     )
 
+    quiz_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(quiz_start, pattern=r"^quiz$"),
+            CommandHandler("quiz", quiz_start),
+        ],
+        states={
+            QZ_HOME: [
+                CallbackQueryHandler(quiz_home, pattern=r"^qh:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            QZ_KIDS: [
+                CallbackQueryHandler(quiz_kids, pattern=r"^qk:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            QZ_TIME: [
+                CallbackQueryHandler(quiz_time, pattern=r"^qt:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            QZ_EXP: [
+                CallbackQueryHandler(quiz_exp, pattern=r"^qe:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            QZ_PRIO: [
+                CallbackQueryHandler(quiz_prio, pattern=r"^qp:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", quiz_cancel)],
+        conversation_timeout=1800,
+    )
+
+    lead_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(lead_start, pattern=r"^lead:")],
+        states={
+            LEAD_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, lead_city)],
+            LEAD_PHONE: [MessageHandler(
+                (filters.TEXT & ~filters.COMMAND) | filters.CONTACT, lead_phone
+            )],
+        },
+        fallbacks=[CommandHandler("cancel", lead_cancel)],
+        conversation_timeout=1800,
+    )
+
+    ad_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(ad_start, pattern=r"^ad_form$")],
+        states={
+            AD_TYPE: [
+                CallbackQueryHandler(ad_type, pattern=r"^adt:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+            AD_WHAT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ad_what)],
+            AD_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, ad_desc)],
+            AD_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ad_price)],
+            AD_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ad_city)],
+            AD_PHOTO: [MessageHandler(filters.PHOTO | (filters.TEXT & ~filters.COMMAND), ad_photo)],
+            AD_CONFIRM: [
+                CallbackQueryHandler(ad_confirm, pattern=r"^ad_(send|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, use_buttons_reply),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", ad_cancel)],
+        conversation_timeout=1800,
+    )
+
     app.add_handler(request_conv)
     app.add_handler(owner_conv)
     app.add_handler(sitter_conv)
@@ -3095,6 +3655,9 @@ def main():
     app.add_handler(ride_conv)
     app.add_handler(message_conv)
     app.add_handler(review_conv)
+    app.add_handler(quiz_conv)
+    app.add_handler(lead_conv)
+    app.add_handler(ad_conv)
     app.add_handler(CallbackQueryHandler(admin_decision, pattern=r"^adm_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_owner_decision, pattern=r"^own_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_sitter_decision, pattern=r"^sit_(ok|no):"))
@@ -3103,6 +3666,7 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_match_decision, pattern=r"^mtc_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_horse_decision, pattern=r"^hrs_(ok|no):"))
     app.add_handler(CallbackQueryHandler(admin_ride_decision, pattern=r"^rid_(ok|no):"))
+    app.add_handler(CallbackQueryHandler(admin_ad_decision, pattern=r"^ads_(ok|no):"))
     app.add_handler(CallbackQueryHandler(on_callback))
     # Страховка: /cancel вне анкет и любое непонятое сообщение — всегда есть ответ
     app.add_handler(CommandHandler("cancel", global_cancel))

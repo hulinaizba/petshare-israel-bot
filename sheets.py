@@ -392,6 +392,43 @@ def add_marketing(row):
     _append_row(config.SHEET_MARKETING, row)
 
 
+# ---------- Спрос (лиды из квиза и пустых экранов) ----------
+
+def add_demand(row):
+    _append_row(config.SHEET_DEMAND, row)
+
+
+# ---------- Доска объявлений ----------
+
+def next_ad_id():
+    records = _get_records(config.SHEET_ADS)
+    return f"ADS-{len(records) + 1:03d}"
+
+
+def add_ad(row):
+    _append_row(config.SHEET_ADS, row)
+
+
+def get_ad_any(ad_id):
+    for a in _get_records(config.SHEET_ADS):
+        if str(a.get("id", "")).strip() == ad_id:
+            return a
+    return None
+
+
+def get_ads(ad_type):
+    """Опубликованные объявления типа 'продам' или 'ищу'."""
+    return [
+        a for a in _get_records(config.SHEET_ADS)
+        if str(a.get("статус", "")).strip() == "опубликовано"
+        and str(a.get("тип", "")).strip() == ad_type
+    ]
+
+
+def update_ad_status(ad_id, status):
+    return _update_fields(config.SHEET_ADS, ad_id, {"статус": status})
+
+
 # ---------- Сообщения (переписка через бота) ----------
 
 def next_message_id():

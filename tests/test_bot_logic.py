@@ -304,6 +304,67 @@ def test_format_friend_card():
     assert "female" in text_en
 
 
+# ---------- Квиз «Подбери породу» ----------
+
+def test_pick_breeds_apartment_novice_calm():
+    breeds = bot.pick_breeds("apt", kids=True, walk_time=0, novice=True, priority="calm")
+    assert len(breeds) == 3
+    # спокойные квартирные породы в топе, никаких овчарок новичку в квартиру
+    assert "Мальтипу" in breeds or "Кавалер-кинг-чарльз" in breeds
+    assert "Немецкая овчарка" not in breeds
+    assert "Бордер-колли" not in breeds
+
+
+def test_pick_breeds_house_active_experienced():
+    breeds = bot.pick_breeds("house", kids=False, walk_time=2, novice=False, priority="act")
+    assert "Бордер-колли" in breeds
+
+
+def test_pick_breeds_guard():
+    breeds = bot.pick_breeds("house", kids=False, walk_time=2, novice=False, priority="guard")
+    assert "Немецкая овчарка" in breeds or "Ризеншнауцер" in breeds
+
+
+def test_all_breeds_have_translations():
+    for breed, entry in i18n.BREEDS.items():
+        assert breed in bot.BREED_TRAITS
+        for lang in i18n.LANGS:
+            assert entry.get(lang), f"нет описания {breed}/{lang}"
+    assert set(bot.BREED_TRAITS) == set(i18n.BREEDS)
+
+
+# ---------- Доска объявлений ----------
+
+ADS = [
+    {"id": "ADS-001", "тип": "продам", "что": "щенки корги", "описание": "2 месяца",
+     "цена": 3000, "город": "Тель-Авив", "tg_id": 501, "статус": "опубликовано"},
+    {"id": "ADS-002", "тип": "ищу", "что": "котёнок мейн-кун", "описание": "до 2000",
+     "цена": 0, "город": "Хайфа", "tg_id": 502, "статус": "опубликовано"},
+    {"id": "ADS-003", "тип": "продам", "что": "хомяки", "описание": "",
+     "цена": 50, "город": "Центр", "tg_id": 503, "статус": "на проверке"},
+]
+
+
+def test_ads_filtered_by_type_and_status():
+    put_cache(config.SHEET_ADS, ADS)
+    assert [a["id"] for a in sheets.get_ads("продам")] == ["ADS-001"]  # ADS-003 не опубликовано
+    assert [a["id"] for a in sheets.get_ads("ищу")] == ["ADS-002"]
+
+
+def test_format_ad_card():
+    put_cache(config.SHEET_ADS, ADS)
+    text = bot.format_ad_card(ADS[0], 1, 1, "ru")
+    assert "ПРОДАЖА" in text and "щенки корги" in text and "3000₪" in text
+    text = bot.format_ad_card(ADS[1], 1, 1, "ru")
+    assert "ИЩУ" in text and "договорная" in text
+
+
+def test_resolve_msg_target_ad():
+    put_cache(config.SHEET_ADS, ADS)
+    tg, label, phone = bot.resolve_msg_target("d", "ADS-001")
+    assert tg == "501" and label == "щенки корги" and phone == ""
+
+
 # ---------- Отзывы, рейтинги, мои заявки ----------
 
 REVIEWS = [
