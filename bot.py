@@ -204,7 +204,7 @@ def language_keyboard():
 async def safe_edit(query, text, reply_markup=None, parse_mode=None):
     """Правит текст экрана; если предыдущий экран был фото — заменяет сообщение."""
     try:
-        if query.message and (query.message.photo or query.message.animation):
+        if query.message and (query.message.photo or query.message.animation or query.message.video):
             await query.message.delete()
             await query.message.chat.send_message(
                 text, reply_markup=reply_markup, parse_mode=parse_mode
@@ -545,7 +545,21 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.exception("Не удалось записать источник пользователя")
 
     if "lang" not in context.user_data:
-        # Живое первое касание: анимированный баннер + выбор языка
+        # Живое первое касание: видео с мелодией (по тапу) + выбор языка
+        video_path = BASE_DIR / "assets" / "welcome_video.mp4"
+        if video_path.exists():
+            try:
+                with open(video_path, "rb") as video:
+                    await update.message.reply_video(
+                        video,
+                        caption=t("welcome_first_caption", "ru"),
+                        reply_markup=language_keyboard(),
+                        parse_mode="HTML",
+                    )
+                return
+            except Exception:
+                logger.exception("Не удалось отправить welcome_video, пробую гифку")
+        # Запасной вариант: анимированный баннер-гифка
         gif_path = BASE_DIR / "assets" / "welcome.gif"
         try:
             with open(gif_path, "rb") as gif:
