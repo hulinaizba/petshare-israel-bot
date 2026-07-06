@@ -429,6 +429,18 @@ def update_ad_status(ad_id, status):
     return _update_fields(config.SHEET_ADS, ad_id, {"статус": status})
 
 
+def increment_ad_leads(ad_id):
+    """+1 обращение по объявлению. Возвращает новое значение счётчика."""
+    ad = get_ad_any(ad_id) or {}
+    try:
+        current = int(ad.get("обращений") or 0)
+    except (ValueError, TypeError):
+        current = 0
+    new_count = current + 1
+    _update_fields(config.SHEET_ADS, ad_id, {"обращений": new_count})
+    return new_count
+
+
 # ---------- Сообщения (переписка через бота) ----------
 
 def next_message_id():

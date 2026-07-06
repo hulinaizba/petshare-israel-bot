@@ -144,6 +144,11 @@ def pick_breeds(home, kids, walk_time, novice, priority):
 # Сервисный сбор за организацию вязки, ₪ (дружба — бесплатно)
 MATING_FEE = 50
 
+# Плата за размещение объявления «продам», ₪.
+# 0 — бесплатно (режим набора аудитории). Поставьте, например, 30 — и бот
+# начнёт сообщать продавцам условия оплаты перед публикацией.
+AD_FEE = 0
+
 GOAL_KEYS = {"дружба": "goal_friend", "вязка": "goal_mate", "обе": "goal_both"}
 SEX_KEYS = {"М": "sex_male", "Ж": "sex_female"}
 SEX_ICONS = {"М": "♂", "Ж": "♀"}
@@ -2392,6 +2397,7 @@ async def msg_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_tg, label, phone = resolve_msg_target(kind, obj_id)
     context.user_data["msg_ctx"] = {
         "target_tg": target_tg, "label": label, "phone": phone, "kind": "вопрос",
+        "ad_id": obj_id if kind == "d" else "",
     }
     await query.message.reply_text(t("ask_intro", lang, name=label), parse_mode="HTML")
     return WRITE_MSG
@@ -2462,9 +2468,21 @@ async def msg_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             logger.exception("Не доставлено сообщение %s адресату %s", msg_id, target_tg)
 
+    # Счётчик обращений по объявлению (каждый пользователь считается один раз)
+    lead_note = ""
+    ad_id = ctx.get("ad_id", "")
+    if ad_id and not context.user_data.get(f"adlead_{ad_id}"):
+        context.user_data[f"adlead_{ad_id}"] = True
+        try:
+            count = sheets.increment_ad_leads(ad_id)
+            lead_note = f"\n📈 Это обращение №{count} по объявлению {ad_id}"
+        except Exception:
+            logger.exception("Не удалось посчитать обращение по %s", ad_id)
+
     # Копия администратору (если он не отправитель и не получатель)
     if user.id != config.ADMIN_CHAT_ID and target_tg != str(config.ADMIN_CHAT_ID):
         note = "" if delivered else "\n⚠️ У адресата нет Telegram — передайте через WhatsApp!"
+        note += lead_note
         admin_rows = []
         wa = whatsapp_link(ctx.get("phone", ""))
         if wa and not delivered:
@@ -3185,6 +3203,8 @@ async def ad_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         type_label=type_label, what=flow["what"], city=flow["city"],
         price=ad_price_label(flow["price"], lang), desc=flow["desc"],
     )
+    if AD_FEE and flow["type"] == "продам":
+        summary += "\n\n" + t("ad_fee_note", lang, fee=AD_FEE)
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(t("btn_own_send", lang), callback_data="ad_send")],
         [InlineKeyboardButton(t("btn_own_cancel", lang), callback_data="ad_cancel")],
