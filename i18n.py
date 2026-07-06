@@ -45,6 +45,23 @@ T = {
             "🇬🇧 3️⃣ Which language shall we continue in?"
         ),
     },
+    # Подпись к анимации при самом первом входе (одинакова на всех языках)
+    "welcome_first_caption": {
+        "ru": (
+            "🐾 <b>PetShare Israel</b> 🐾\n\n"
+            "🇷🇺 Мы рады вас приветствовать!\n"
+            "🇬🇧 We are happy to see you!\n"
+            "🇮🇱 !שמחים לראות אתכם\n\n"
+            "🐕 Аренда животных · Pet rentals · השכרת חיות\n"
+            "🐴 Конные прогулки · Horse rides · רכיבת סוסים\n"
+            "🏡 Передержка · Boarding · פנסיון\n"
+            "💞 Знакомства · Matchmaking · היכרויות\n"
+            "📢 Объявления · Classifieds · לוח מודעות\n\n"
+            "👇 Выберите язык · Choose a language · בחרו שפה"
+        ),
+        "en": "🐾 PetShare Israel — choose your language below 👇",
+        "he": "🐾 PetShare Israel — בחרו שפה למטה 👇",
+    },
     "use_buttons": {
         "ru": "☝️ Пожалуйста, нажмите одну из кнопок выше 🙂",
         "en": "☝️ Please tap one of the buttons above 🙂",

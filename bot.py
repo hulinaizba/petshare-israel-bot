@@ -30,6 +30,7 @@ from telegram.ext import (
 import config
 import i18n
 import sheets
+from config import BASE_DIR
 from i18n import LANGS, t, tr_value
 
 logging.basicConfig(
@@ -203,7 +204,7 @@ def language_keyboard():
 async def safe_edit(query, text, reply_markup=None, parse_mode=None):
     """Правит текст экрана; если предыдущий экран был фото — заменяет сообщение."""
     try:
-        if query.message and query.message.photo:
+        if query.message and (query.message.photo or query.message.animation):
             await query.message.delete()
             await query.message.chat.send_message(
                 text, reply_markup=reply_markup, parse_mode=parse_mode
@@ -544,11 +545,19 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.exception("Не удалось записать источник пользователя")
 
     if "lang" not in context.user_data:
-        # Крупные анимированные эмодзи — «живое» первое касание
+        # Живое первое касание: анимированный баннер + выбор языка
+        gif_path = BASE_DIR / "assets" / "welcome.gif"
         try:
-            await update.message.reply_text("🐶")
+            with open(gif_path, "rb") as gif:
+                await update.message.reply_animation(
+                    gif,
+                    caption=t("welcome_first_caption", "ru"),
+                    reply_markup=language_keyboard(),
+                    parse_mode="HTML",
+                )
+            return
         except Exception:
-            pass
+            logger.exception("Не удалось отправить welcome.gif, показываю текст")
         await update.message.reply_text(
             t("choose_lang_first", "ru"),
             reply_markup=language_keyboard(),

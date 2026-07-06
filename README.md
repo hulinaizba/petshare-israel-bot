@@ -7,6 +7,8 @@
 
 Работает в продакшене 24/7 на VPS (Ubuntu, systemd).
 
+![Обложка](docs/gallery/01_cover.png)
+
 ---
 
 ## Что умеет бот
@@ -80,6 +82,14 @@ setup_sheets.py — разовая инициализация структуры
 tests/          — 51 тест бизнес-логики
 deploy/         — systemd-юнит, скрипт деплоя одной командой, инструкция
 ```
+
+## Галерея
+
+| | | |
+|---|---|---|
+| ![Идея](docs/gallery/02_idea.png) | ![Услуги](docs/gallery/03_services.png) | ![Языки](docs/gallery/04_languages.png) |
+| ![Воронка](docs/gallery/05_funnel.png) | ![Экономика](docs/gallery/06_economics.png) | ![Архитектура](docs/gallery/07_architecture.png) |
+| ![Модерация](docs/gallery/08_moderation.png) | ![Стек](docs/gallery/09_stack.png) | ![Цифры](docs/gallery/10_stats.png) |
 
 ## Запуск
 
