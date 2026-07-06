@@ -386,6 +386,12 @@ def get_requests_by_tg(sheet_name, tg_field, tg_id):
     ]
 
 
+# ---------- Маркетинг: источники пользователей ----------
+
+def add_marketing(row):
+    _append_row(config.SHEET_MARKETING, row)
+
+
 # ---------- Сообщения (переписка через бота) ----------
 
 def next_message_id():

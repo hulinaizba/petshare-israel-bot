@@ -441,6 +441,21 @@ def card_keyboard(category, index, total, animal_id, lang):
 # ---------- Команды ----------
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Метка источника: /start wa → человек пришёл по ссылке ?start=wa
+    if context.args and not context.user_data.get("src_logged"):
+        context.user_data["src_logged"] = True
+        try:
+            user = update.effective_user
+            sheets.add_marketing([
+                datetime.now().strftime("%d.%m.%Y %H:%M"),
+                user.id,
+                user.full_name + (f" (@{user.username})" if user.username else ""),
+                context.args[0][:32],
+                context.user_data.get("lang", ""),
+            ])
+        except Exception:
+            logger.exception("Не удалось записать источник пользователя")
+
     if "lang" not in context.user_data:
         # Крупные анимированные эмодзи — «живое» первое касание
         try:
