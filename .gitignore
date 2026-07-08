@@ -9,3 +9,4 @@ launchd.log
 .DS_Store
 bot_state.pkl
 assets/welcome_video.mp4
+!docs/app/catalog.json
