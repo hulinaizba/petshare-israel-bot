@@ -4,6 +4,7 @@
 Запуск: ./venv/bin/python bot.py
 """
 
+import json
 import logging
 from datetime import datetime
 
@@ -15,6 +16,7 @@ from telegram import (
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
     Update,
+    WebAppInfo,
 )
 from telegram.ext import (
     Application,
@@ -144,6 +146,9 @@ def pick_breeds(home, kids, walk_time, novice, priority):
 
 # Сервисный сбор за организацию вязки, ₪ (дружба — бесплатно)
 MATING_FEE = 50
+
+# Адрес витрины (Mini App на GitHub Pages)
+APP_URL = "https://hulinaizba.github.io/petshare-israel-bot/app/"
 
 # Плата за размещение объявления «продам», ₪.
 # 0 — бесплатно (режим набора аудитории). Поставьте, например, 30 — и бот
@@ -677,6 +682,16 @@ async def cmd_horses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         t("horses_menu", lang), reply_markup=horses_menu_keyboard(lang), parse_mode="HTML"
     )
+
+
+async def cmd_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка-витрина: открытая так витрина умеет отправлять заявки в бота."""
+    lang = L(context)
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton(t("btn_app", lang), web_app=WebAppInfo(url=APP_URL))]],
+        resize_keyboard=True,
+    )
+    await update.message.reply_text(t("app_hint", lang), reply_markup=keyboard)
 
 
 async def cmd_ads(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1337,7 +1352,19 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     animal = context.user_data["req_animal"]
-    user = update.effective_user
+    req_id = await submit_rental_request(
+        context, update.effective_user, animal,
+        context.user_data["req_date"], context.user_data["req_phone"],
+        source="бот",
+    )
+    await safe_edit(query, t("req_sent", lang, id=req_id), parse_mode="HTML")
+    for key in ("req_animal", "req_date", "req_phone"):
+        context.user_data.pop(key, None)
+    return ConversationHandler.END
+
+
+async def submit_rental_request(context, user, animal, date_text, phone, source="бот"):
+    """Создаёт заявку на аренду: запись в таблицу + уведомление администратору."""
     price = parse_price(animal.get("цена_событие"))
     client_fee = compute_client_fee(price)
     owner_commission = round(price * OWNER_COMMISSION)
@@ -1349,29 +1376,28 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         req_id,
         datetime.now().strftime("%d.%m.%Y %H:%M"),
         client_name,
-        context.user_data["req_phone"],
+        phone,
         user.id,
         animal.get("id", ""),
         animal.get("имя", ""),
-        context.user_data["req_date"],
+        date_text,
         "новая",
-        "",
+        "из витрины" if source == "витрина" else "",
         price,
         client_fee,
         owner_commission,
         platform_income,
     ])
 
-    await safe_edit(query,t("req_sent", lang, id=req_id), parse_mode="HTML")
-
     # Уведомление администратору (всегда на русском)
     owner = sheets.get_owner_by_id(str(animal.get("владелец_id", "")).strip()) or {}
     admin_text = (
-        f"🔔 <b>Новая заявка {req_id}</b>\n\n"
+        f"🔔 <b>Новая заявка {req_id}</b>"
+        + (" 🛍 из витрины" if source == "витрина" else "") + "\n\n"
         f"🐾 {animal.get('имя', '')} ({animal.get('порода', '')}, {animal.get('id', '')})\n"
-        f"📅 Дата: {context.user_data['req_date']}\n"
+        f"📅 Дата: {date_text}\n"
         f"👤 Клиент: {client_name}\n"
-        f"📱 Телефон: {context.user_data['req_phone']}\n\n"
+        f"📱 Телефон: {phone}\n\n"
         f"👨‍💼 Владелец: {owner.get('имя', '—')}, {owner.get('телефон', '—')}\n"
         f"💬 WhatsApp: {owner.get('whatsapp', '—')}\n\n"
         f"💰 Аренда: {price}₪\n"
@@ -1395,10 +1421,33 @@ async def request_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception:
         logger.exception("Не удалось отправить уведомление администратору")
+    return req_id
 
-    for key in ("req_animal", "req_date", "req_phone"):
-        context.user_data.pop(key, None)
-    return ConversationHandler.END
+
+async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Заявка, отправленная из витрины (Mini App) через sendData."""
+    lang = L(context)
+    try:
+        data = json.loads(update.effective_message.web_app_data.data)
+    except (ValueError, AttributeError):
+        return
+    if data.get("a") != "book":
+        return
+    animal = sheets.get_animal_by_id(str(data.get("id", "")).strip())
+    date_text = str(data.get("date", "")).strip()[:64]
+    phone = str(data.get("phone", "")).strip()[:32]
+    if not animal:
+        await update.effective_message.reply_text(t("req_unavailable", lang))
+        return
+    if not date_text or not phone:
+        await update.effective_message.reply_text(t("fallback_msg", lang))
+        return
+    req_id = await submit_rental_request(
+        context, update.effective_user, animal, date_text, phone, source="витрина"
+    )
+    await update.effective_message.reply_text(
+        t("req_sent", lang, id=req_id), parse_mode="HTML"
+    )
 
 
 async def request_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3428,6 +3477,7 @@ async def post_init(app):
         ("boarding", "🏡 Передержка / Boarding / פנסיון"),
         ("friends", "💞 Знакомства / Matchmaking / היכרויות"),
         ("horses", "🐴 Конные прогулки / Horse rides / רכיבה"),
+        ("app", "🛍 Витрина / Showcase / חלון ראווה"),
         ("quiz", "🐶 Подобрать породу / Find my breed / להתאים גזע"),
         ("ads", "📢 Объявления / Classifieds / לוח מודעות"),
         ("my", "📋 Мои заявки / My requests / הבקשות שלי"),
@@ -3577,6 +3627,8 @@ def main():
     app.add_handler(CommandHandler("horses", cmd_horses))
     app.add_handler(CommandHandler("my", cmd_my))
     app.add_handler(CommandHandler("ads", cmd_ads))
+    app.add_handler(CommandHandler("app", cmd_app))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_web_app_data))
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))

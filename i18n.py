@@ -62,6 +62,12 @@ T = {
         "en": "🐾 PetShare Israel — choose your language below 👇",
         "he": "🐾 PetShare Israel — בחרו שפה למטה 👇",
     },
+    "app_hint": {
+        "ru": "🛍 Витрина открывается по кнопке ниже 👇\nКаталог с фото — и бронирование в пару касаний, не выходя из витрины!",
+        "en": "🛍 The showcase opens with the button below 👇\nA photo catalog — and booking in a couple of taps, right inside!",
+        "he": "🛍 חלון הראווה נפתח בכפתור למטה 👇\nקטלוג עם תמונות — והזמנה בכמה לחיצות, בלי לצאת!",
+    },
+    "btn_app": {"ru": "🛍 Витрина", "en": "🛍 Showcase", "he": "🛍 חלון ראווה"},
     "use_buttons": {
         "ru": "☝️ Пожалуйста, нажмите одну из кнопок выше 🙂",
         "en": "☝️ Please tap one of the buttons above 🙂",

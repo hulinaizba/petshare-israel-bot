@@ -59,6 +59,28 @@
   .empty { text-align: center; color: var(--grey); padding: 50px 30px; font-size: 15px; }
   .empty a { color: var(--teal); }
   footer { text-align: center; color: var(--grey); font-size: 12px; padding: 18px; }
+
+  /* Модалка бронирования */
+  .overlay { position: fixed; inset: 0; background: rgba(10,8,20,.75); display: none;
+             align-items: flex-end; justify-content: center; z-index: 10; }
+  .overlay.open { display: flex; }
+  .modal { width: 100%; max-width: 480px; background: #201638;
+           border-radius: 22px 22px 0 0; padding: 22px 20px 26px;
+           animation: slideup .25s ease; }
+  @keyframes slideup { from {transform: translateY(60px); opacity: 0} to {transform: none; opacity: 1} }
+  .modal h3 { font-size: 18px; margin-bottom: 4px; }
+  .modal .msum { color: var(--grey); font-size: 13px; margin-bottom: 14px; }
+  .modal label { display: block; font-size: 13px; color: var(--grey); margin: 10px 0 4px; }
+  .modal input { width: 100%; padding: 12px 14px; border-radius: 12px; font-size: 15px;
+                 border: 1.5px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06);
+                 color: var(--white); outline: none; }
+  .modal input:focus { border-color: var(--amber); }
+  .mtotal { margin-top: 12px; font-size: 14px; color: var(--white); }
+  .mtotal b { color: var(--amber); }
+  .mbtns { display: flex; gap: 10px; margin-top: 16px; }
+  .mbtns .book { flex: 1; margin: 0; padding: 12px 0; }
+  .mcancel { flex: 0 0 auto; padding: 12px 18px; border-radius: 12px; background: transparent;
+             border: 1.5px solid var(--grey); color: var(--grey); font-size: 14px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -69,19 +91,67 @@
 <div class="chips" id="chips"></div>
 <div class="grid" id="grid"></div>
 <footer>Заявка оформляется в боте за 2 минуты · @dranik_israBot</footer>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3 id="mtitle">Бронирование</h3>
+    <div class="msum" id="msum"></div>
+    <label>📅 Дата и время · Date / example: 12.07 16:00</label>
+    <input id="mdate" placeholder="12.07 в 16:00">
+    <label>📱 Телефон · Phone</label>
+    <input id="mphone" type="tel" placeholder="+972 50 000 0000">
+    <div class="mtotal" id="mtotal"></div>
+    <div class="mbtns">
+      <button class="mcancel" onclick="closeModal()">✕</button>
+      <a class="book" href="#" id="msend">Отправить заявку 📩</a>
+    </div>
+  </div>
+</div>
+
 <script>
 const BOT = "dranik_israBot";
 const EMOJI = {"Собаки":"🐕","Кошки":"🐈","Птицы":"🦜","Грызуны и кролики":"🐇",
                "Экзотика и ферма":"🦙","Лошади":"🐴"};
-let items = [], active = "все";
+let items = [], active = "все", current = null;
 
 const tg = window.Telegram && window.Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
+// sendData работает, когда витрина открыта кнопкой-клавиатурой (/app в боте)
+const canSendData = !!(tg && tg.initDataUnsafe && tg.initDataUnsafe.user
+                       && !tg.initDataUnsafe.query_id);
 
 function bookLink(it) {
   const payload = (it.kind === "horse" ? "ride_" : "rent_") + it.id;
   return `https://t.me/${BOT}?start=${payload}`;
 }
+
+function openModal(id) {
+  current = items.find(it => it.id === id);
+  if (!current) return;
+  const price = parseInt(current.price_event) || 0;
+  const fee = Math.round(price * 0.1);
+  document.getElementById("mtitle").textContent = `${EMOJI[current.category] || "🐾"} ${current.name}`;
+  document.getElementById("msum").textContent = `${current.breed} · ${current.city}`;
+  document.getElementById("mtotal").innerHTML = price
+    ? `${price}₪ + сбор 10% (${fee}₪) = <b>${price + fee}₪</b>`
+    : "";
+  document.getElementById("overlay").classList.add("open");
+}
+
+function closeModal() {
+  document.getElementById("overlay").classList.remove("open");
+}
+
+document.getElementById("msend").onclick = (e) => {
+  e.preventDefault();
+  const date = document.getElementById("mdate").value.trim();
+  const phone = document.getElementById("mphone").value.trim();
+  if (!date || !phone || !current) {
+    if (tg) tg.showAlert("Заполните дату и телефон 🙂 / Please fill in date & phone");
+    return;
+  }
+  tg.sendData(JSON.stringify({a: "book", id: current.id, date: date, phone: phone}));
+};
 
 function render() {
   const grid = document.getElementById("grid");
@@ -102,7 +172,9 @@ function render() {
         <div class="sub">${it.breed} · ${it.city}</div>
         ${it.desc ? `<div class="desc">${it.desc}</div>` : ""}
         <div class="price">${it.price_hour}₪/час${it.price_event ? ` · ${it.price_event}₪${it.kind === "horse" ? " закат" : "/событие"}` : ""}</div>
-        <a class="book" href="${bookLink(it)}">Забронировать</a>
+        ${canSendData && it.kind === "animal"
+          ? `<a class="book" href="#" onclick="openModal('${it.id}');return false">Забронировать</a>`
+          : `<a class="book" href="${bookLink(it)}">Забронировать</a>`}
       </div>
     </div>`).join("");
 }
@@ -117,7 +189,7 @@ function renderChips(cats) {
   });
 }
 
-fetch("catalog.json").then(r => r.json()).then(data => {
+fetch("catalog.json?v=" + Date.now()).then(r => r.json()).then(data => {
   items = data;
   renderChips([...new Set(items.map(it => it.category))]);
   render();
