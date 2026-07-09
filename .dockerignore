@@ -1,0 +1,12 @@
+venv/
+.git/
+__pycache__/
+*.pyc
+.env
+service_account.json
+bot.log
+launchd.log
+bot_state.pkl
+docs/
+assets/welcome_video.mp4
+.pytest_cache/

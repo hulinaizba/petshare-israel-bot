@@ -36,6 +36,9 @@ SERVICE_ACCOUNT_FILE = str(BASE_DIR / "service_account.json")
 # https://docs.google.com/spreadsheets/d/<ВОТ_ЭТОТ_КОД>/edit
 SPREADSHEET_ID = os.environ.get("PETSHARE_SPREADSHEET_ID", "")
 
+# Файл состояния пользователей (язык и т.п.); в Docker — /data/bot_state.pkl
+STATE_FILE = os.environ.get("PETSHARE_STATE_FILE", "bot_state.pkl")
+
 # Названия листов в таблице
 SHEET_ANIMALS = "Животные"
 SHEET_REQUESTS = "Заявки"

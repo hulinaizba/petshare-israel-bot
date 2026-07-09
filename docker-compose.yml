@@ -1,0 +1,12 @@
+services:
+  petshare:
+    build: .
+    container_name: petshare-bot
+    restart: unless-stopped
+    volumes:
+      - ./.env:/app/.env:ro                              # секреты — снаружи образа
+      - ./service_account.json:/app/service_account.json:ro
+      - petshare_data:/data                              # язык пользователей и пр.
+
+volumes:
+  petshare_data:

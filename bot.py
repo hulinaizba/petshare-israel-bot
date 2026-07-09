@@ -3441,7 +3441,7 @@ async def post_init(app):
 def main():
     if not config.BOT_TOKEN:
         raise SystemExit("Не задан PETSHARE_BOT_TOKEN в .env")
-    persistence = PicklePersistence(filepath="bot_state.pkl")
+    persistence = PicklePersistence(filepath=config.STATE_FILE)
     app = (
         Application.builder()
         .token(config.BOT_TOKEN)
